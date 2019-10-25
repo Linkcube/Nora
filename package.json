@@ -1,0 +1,33 @@
+{
+  "name": "nora",
+  "version": "1.0.0",
+  "description": "Nodejs R/a/dio Archiver",
+  "main": "nora.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Linkcube/Nora.git"
+  },
+  "author": "Linkcube",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Linkcube/Nora/issues"
+  },
+  "homepage": "https://github.com/Linkcube/Nora#readme",
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.0.20",
+    "@ffprobe-installer/ffprobe": "^1.0.12",
+    "cors": "^2.8.5",
+    "express": "^4.17.1",
+    "express-graphql": "^0.9.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "graphql": "^14.5.8",
+    "node-id3": "^0.1.11",
+    "request": "^2.88.0",
+    "request-promise": "^4.2.4",
+    "rimraf": "^3.0.0",
+    "sanitize-filename": "^1.6.3"
+  }
+}
