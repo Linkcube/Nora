@@ -59,7 +59,7 @@ var last_rec = false;
 var output_folders = [];
 var excluded_djs = ["Hanyuu-sama"];
 var split_character = " - ";
-var max_dirs_sent = 50;
+var max_dirs_sent = 10;
 
 
 function return_copy(x) {
@@ -300,14 +300,11 @@ function dj_change() {
     console.log(api.dj_name + " has taken over.");
     if (last_rec == false) {
         folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-        output_folders.push(folder + ' ' + api.dj_name);
         fs.mkdir(folder + ' ' + api.dj_name, (err) => {
-            if (err)
-                throw err;
+            if (err && err.code != 'EEXIST') throw err;
         });
         fs.mkdir(folder, (err) => {
-            if (err != null)
-                throw err;
+            if (err && err.code != 'EEXIST') throw err;
             current_song = 1;
             console.log("Setting up the stream");
             rec_start = api.current_time;
@@ -316,14 +313,14 @@ function dj_change() {
             song_change();
             start_streaming();
         });
+        output_folders.push(folder + ' ' + api.dj_name);
     }
     else {
         let new_folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-        output_folders.push(new_folder + ' ' + api.dj_name);
         fs.mkdir(new_folder + ' ' + api.dj_name, (err) => {
-            if (err)
-                throw err;
+            if (err && err.code != 'EEXIST') throw err;
         });
+        output_folders.push(new_folder + ' ' + api.dj_name);
         current_song = 1;
         get_dj_pic();
         song_change();
