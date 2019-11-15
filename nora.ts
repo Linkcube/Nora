@@ -17,24 +17,41 @@ var request = require('request');
 var NodeID3 = require('node-id3');
 var ffmpeg = require('fluent-ffmpeg');
 // Platform agnostic ffmpeg/ffprobe install
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+const ffmpegPath: string = require('@ffmpeg-installer/ffmpeg').path;
 ffmpeg.setFfmpegPath(ffmpegPath);
-const ffprobePath = require('@ffprobe-installer/ffprobe').path;
+const ffprobePath: string = require('@ffprobe-installer/ffprobe').path;
 ffmpeg.setFfprobePath(ffprobePath);
 var express = require('express');
 var express_graphql = require('express-graphql');
 var { buildSchema } = require('graphql');
 var cors = require('cors');
-var api_uri = "https://r-a-d.io/api";
-var server_uri = "https://stream.r-a-d.io/status-json.xsl";
-var stream_uri = "https://relay0.r-a-d.io/main.mp3";
-var poll_interval = 5000;
-var server = {
+var api_uri: string = "https://r-a-d.io/api";
+var server_uri: string = "https://stream.r-a-d.io/status-json.xsl";
+var stream_uri: string = "https://relay0.r-a-d.io/main.mp3";
+var poll_interval: number = 5000;
+interface ServerObject {
+    bitrate: number,
+    sample_rate: number,
+    audio_format: string,
+    server_name: string,
+    server_description: string
+}
+var server: ServerObject = {
     bitrate: 0,
     sample_rate: 0,
     audio_format: "",
     server_name: "",
     server_description: ""
+};
+interface ApiObject {
+    np: string,
+    listeners: number,
+    dj_name: string,
+    dj_pic: string,
+    start_time: number,
+    end_time: number,
+    current_time: number,
+    lp: [],
 };
 var api = {
     np: "",
@@ -46,39 +63,69 @@ var api = {
     current_time: 0,
     lp: [],
 };
-var current_song = 1;
+var current_song: number = 1;
 var stream_request;
-var folder = "";
-var export_folder = "";
-var song_list = [];
-var metadata_list = [];
-var rec_start;
-var cover_path = "";
-var force_stop = false;
-var last_rec = false;
-var output_folders = [];
-var excluded_djs = ["Hanyuu-sama"];
-var split_character = " - ";
-var max_dirs_sent = 10;
+var folder: string = "";
+var export_folder: string = "";
+interface SongObject {
+    start: number,
+    filename: string,
+    dj: string,
+    cover: string,
+    album: string,
+    duration?: number
+}
+var song_list: SongObject[] = [];
+interface MetaDataObject {
+    song_name: string,
+    artist: string,
+    location: string,
+    track: number,
+}
+var metadata_list: MetaDataObject[] = [];
+var rec_start: number;
+var cover_path: string = "";
+var force_stop: Boolean = false;
+var last_rec: Boolean = false;
+var output_folders: string[] = [];
+var excluded_djs: string[] = ["Hanyuu-sama"];
+var split_character: string = " - ";
+var max_dirs_sent: number = 10;
+interface SharedDataObject {
+    date: number,
+    raw_path: string,
+    folder: string
+}
+interface UpdateDataObject {
+    config: UpdateConfigObject
+}
+interface UpdateConfigObject {
+    api_uri: string,
+    server_uri: string,
+    stream_uri: string,
+    poll_interval: number,
+    excluded_djs: string[],
+    export_folder: string
+}
 
 
-function return_copy(x) {
+function return_copy(x: Object) {
     return JSON.parse(JSON.stringify(x));
 }
 
-function resolve_after_get(x) {
-    return rp(x).then(function (result) {
+function resolve_after_get(x: string) {
+    return rp(x).then(function (result: string) {
         return (JSON.parse(result));
     });
 }
 
-function format_seconds(seconds) {
+function format_seconds(seconds: number) {
     var measuredTime = new Date(null);
     measuredTime.setSeconds(seconds);
     return measuredTime.toISOString().substr(11, 8);
 }
 
-function gen_song_meta(filename) {
+function gen_song_meta(filename: string) {
     var song_name, artist;
     if (api.np.split(split_character).length === 2) {
         song_name = api.np.split(split_character)[1];
@@ -120,7 +167,7 @@ function get_dj_pic() {
     });
 }
 
-function split_song(shared_data, song, meta) {
+function split_song(shared_data: SharedDataObject, song: SongObject, meta: MetaDataObject) {
     //console.log(song);
     if (song.duration == 0)
         return null;
@@ -155,7 +202,7 @@ function split_song(shared_data, song, meta) {
     });
 }
 
-function multi_thread(shared_data, song_list, meta_list) {
+function multi_thread(shared_data: SharedDataObject, song_list: SongObject[], meta_list: MetaDataObject[]) {
     return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
         for (let i = 0; i < song_list.length; i++) {
             let song = song_list[i];
@@ -166,7 +213,7 @@ function multi_thread(shared_data, song_list, meta_list) {
     }));
 }
 
-function cleanup_post_processing(shared_data) {
+function cleanup_post_processing(shared_data: SharedDataObject) {
     rmdir(shared_data.folder, (err) => {
         if (err)
             console.log(err);
@@ -174,7 +221,7 @@ function cleanup_post_processing(shared_data) {
     console.log("Finished splitting");
 }
 
-function process_recording(shared_data, song_list, meta_list) {
+function process_recording(shared_data: SharedDataObject, song_list: SongObject[], meta_list: MetaDataObject[]) {
     // Store song and meta list for repeat testing
     let song_list_path = path.join(shared_data.folder, "song_list.json");
     fs.writeFile(song_list_path, JSON.stringify(song_list), (err) => {
@@ -205,7 +252,7 @@ function process_recording(shared_data, song_list, meta_list) {
                     duration = data.format.duration;
                 }
                 else if (song.start > data.format.duration) {
-                    console.log(`Error: song starts after end of stream ${song.song_name}`);
+                    console.log(`Error: song starts after end of stream ${song.filename}`);
                     duration = 0;
                     song.start = 0;
                 }
@@ -542,7 +589,7 @@ var getRecordingSongs = (data) => {
     let dirs = fs.readdirSync(data.folder, { withFileTypes: true }).filter(file => (file.isFile() && file.name.split(' ').length > 1));
     return { songs: dirs.map(dir => dir.name) };
 };
-var updateConfig = (data) => {
+var updateConfig = (data: UpdateDataObject) => {
     console.log(data);
     api_uri = data.config.api_uri;
     server_uri = data.config.server_uri;
@@ -553,7 +600,7 @@ var updateConfig = (data) => {
     dj_change();
     return "Changed";
 };
-var printLog = (msg) => {
+var printLog = (msg: string) => {
     console.log(msg);
     return msg;
 };
