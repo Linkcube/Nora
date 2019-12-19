@@ -1,6 +1,6 @@
 {
   "name": "nora",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Nodejs R/a/dio Archiver",
   "main": "nora.js",
   "scripts": {
@@ -29,5 +29,9 @@
     "request-promise": "^4.2.4",
     "rimraf": "^3.0.0",
     "sanitize-filename": "^1.6.3"
+  },
+  "devDependencies": {
+    "ts-node": "^8.5.2",
+    "typescript": "^3.7.2"
   }
 }
