@@ -15,6 +15,7 @@ Start recording (from a stopped state): `http://localhost:8080/start`
 
 ## Editable Variables
 Description | Type | Example
+--- | --- | ---
 Poll Interval (poll_interval) | Integer (ms) | `poll_interval = 5000`
 Exluded DJs | [String] | `excluded_djs = ["Hanyuu-sama"]`
 Output Folder | String | `output_folder = "."`
