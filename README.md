@@ -10,6 +10,8 @@ Install: `npm install`
 
 Running: `ts-node nora.ts`
 
+Mac users may have to include `npx` before the ts-node command
+
 ## Basic Control Endpoints
 Stop recording: `http://localhost:8080/stop`
 
