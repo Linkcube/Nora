@@ -1,0 +1,6 @@
+# Node modules
+node_modules
+package-lock.json
+
+# Default top-level recordings
+15*
