@@ -10,7 +10,9 @@ Running: `ts-node nora.ts`
 
 ## Basic Control Endpoints
 Stop recording: `http://localhost:8080/stop`
+
 Restart recording: `http://localhost:8080/refresh`
+
 Start recording (from a stopped state): `http://localhost:8080/start`
 
 ## Editable Variables
