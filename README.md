@@ -24,8 +24,11 @@ Description | Type | Example
 --- | --- | ---
 Poll Interval (poll_interval) | Integer (ms) | `poll_interval = 5000`
 Exluded DJs | [String] | `excluded_djs = ["Hanyuu-sama"]`
-Output Folder | String | `output_folder = "."`
+Export Folder | String | `export_folder = "."`
 
-Though output_folders hasn't been tested (it's probably broken) so it's best to leave these at default.
+## CLI args
+Usage (shorthand) | Description | Example
+--- | --- | ---
+--load_config (-l) | Load a config file | `-l radio.json`
 
 [Nai](https://github.com/linkcube/nai), the complimenting UI to this project manages many of the safe value changes so there's no real need to mess around with them.
