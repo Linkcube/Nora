@@ -1,11 +1,8 @@
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
+import { promises } from "dns";
+
+var app; // express app
+var http_server; // replace with gql
+var polling_interval_id;
 var rp = require('request-promise');
 var http = require('http');
 var https = require('https');
@@ -16,6 +13,8 @@ var sane_fs = require('sanitize-filename');
 var request = require('request');
 var NodeID3 = require('node-id3');
 var ffmpeg = require('fluent-ffmpeg');
+var _ = require('lodash');
+var cli_args = require('command-line-args');
 // Platform agnostic ffmpeg/ffprobe install
 const ffmpegPath: string = require('@ffmpeg-installer/ffmpeg').path;
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -53,7 +52,7 @@ interface ApiObject {
     current_time: number,
     lp: [],
 };
-var api = {
+var api: ApiObject = {
     np: "",
     listeners: 0,
     dj_name: "",
@@ -66,7 +65,7 @@ var api = {
 var current_song: number = 1;
 var stream_request;
 var folder: string = "";
-var export_folder: string = "";
+var export_folder: string = path.join(".", "recordings_folder");
 interface SongObject {
     start: number,
     filename: string,
@@ -85,7 +84,7 @@ interface MetaDataObject {
 var metadata_list: MetaDataObject[] = [];
 var rec_start: number;
 var cover_path: string = "";
-var force_stop: Boolean = false;
+var force_stop: Boolean = true;
 var last_rec: Boolean = false;
 var output_folders: string[] = [];
 var excluded_djs: string[] = ["Hanyuu-sama"];
@@ -106,11 +105,6 @@ interface UpdateConfigObject {
     poll_interval: number,
     excluded_djs: string[],
     export_folder: string
-}
-
-
-function return_copy(x: Object) {
-    return JSON.parse(JSON.stringify(x));
 }
 
 function resolve_after_get(x: string) {
@@ -146,7 +140,13 @@ function gen_song_meta(filename: string) {
 function song_change() {
     let start;
     start = Math.max(0, api.start_time - rec_start);
-    let filename = path.join(output_folders[output_folders.length - 1], current_song + ". " + sane_fs(api.np.substring(0, 20))) + '.mp3';
+    let filename = path.format({
+        dir: path.join(
+            export_folder,
+            output_folders[output_folders.length - 1]
+        ),
+        base: `${current_song}. ${sane_fs(api.np.substring(0, 20))}.mp3`
+    });
     song_list.push({
         start: start,
         filename: filename,
@@ -162,13 +162,19 @@ function song_change() {
 function get_dj_pic() {
     let dj_pic_url = api_uri + "/dj-image/" + api.dj_pic;
     let dot_split = api.dj_pic.split('.');
-    cover_path = path.join(output_folders[output_folders.length - 1], "cover." + dot_split[dot_split.length - 1]);
+
+    cover_path = path.format({
+        dir: path.join(
+            export_folder,
+            output_folders[output_folders.length - 1]
+        ),
+        base: `cover.${dot_split[dot_split.length - 1]}`
+    });
     request(dj_pic_url).pipe(fs.createWriteStream(cover_path)).on('close', () => {
     });
 }
 
 function split_song(shared_data: SharedDataObject, song: SongObject, meta: MetaDataObject) {
-    //console.log(song);
     if (song.duration == 0)
         return null;
     return new Promise((resolve, reject) => {
@@ -203,14 +209,14 @@ function split_song(shared_data: SharedDataObject, song: SongObject, meta: MetaD
 }
 
 function multi_thread(shared_data: SharedDataObject, song_list: SongObject[], meta_list: MetaDataObject[]) {
-    return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
+    return new Promise(async (resolve, reject) => {
         for (let i = 0; i < song_list.length; i++) {
             let song = song_list[i];
             let meta = meta_list[i];
-            yield split_song(shared_data, song, meta);
+            await split_song(shared_data, song, meta);
         }
         resolve();
-    }));
+    });
 }
 
 function cleanup_post_processing(shared_data: SharedDataObject) {
@@ -223,27 +229,39 @@ function cleanup_post_processing(shared_data: SharedDataObject) {
 
 function process_recording(shared_data: SharedDataObject, song_list: SongObject[], meta_list: MetaDataObject[]) {
     // Store song and meta list for repeat testing
-    let song_list_path = path.join(shared_data.folder, "song_list.json");
+    let song_list_path = path.format({
+        dir: shared_data.folder,
+        base: "song_list.json"
+    });
     fs.writeFile(song_list_path, JSON.stringify(song_list), (err) => {
         if (err)
             console.log(err);
     });
-    let meta_list_path = path.join(shared_data.folder, "meta_list.json");
+    let meta_list_path = path.format({
+        dir: shared_data.folder,
+        base: "meta_list.json"
+    });
     fs.writeFile(meta_list_path, JSON.stringify(meta_list), (err) => {
         if (err)
             console.log(err);
     });
-    let shared_data_path = path.join(shared_data.folder, "shared_data.json");
+    let shared_data_path = path.format({
+        dir: shared_data.folder,
+        base: "shared_data.json"
+    });
     fs.writeFile(shared_data_path, JSON.stringify(shared_data), (err) => {
         if (err)
             console.log(err);
     });
     // Actual splitting
     if (Object.keys(song_list).length != 0) {
-        console.log("Splitting file");
-        ffmpeg(shared_data.raw_path).ffprobe((err, data) => __awaiter(this, void 0, void 0, function* () {
-            if (err)
-                throw err;
+        console.log(`Splitting ${shared_data.folder}`);
+
+        ffmpeg(shared_data.raw_path).ffprobe((err, data) => {
+            if (err) {
+                console.log(`ffprobe error: ${err}`);
+                return;
+            }
             // Calculate duration of each song
             let song_count = 0;
             song_list.forEach((song) => {
@@ -264,67 +282,51 @@ function process_recording(shared_data: SharedDataObject, song_list: SongObject[
             });
             // Split the file
             let threads = 2;
-            if (threads === 1 || song_list.length === 1) {
-                // Single thread
-                for (let i = 0; i < song_list.length; i++) {
-                    let song = song_list[i];
-                    let meta = meta_list[i];
-                    yield split_song(shared_data, song, meta);
-                }
-                cleanup_post_processing(shared_data);
+            if (threads < 1) {
+                // Kill the CPU
+                threads = song_list.length;
             }
-            else {
-                if (threads < 1) {
-                    // Kill the CPU
-                    threads = song_list.length;
-                }
-                // Multi-thread
-                let promises = [];
-                for (let i = 0; i < threads; i++) {
-                    let sub_song = song_list.slice(song_list.length / threads * i, song_list.length / threads * (i + 1));
-                    let sub_meta = meta_list.slice(meta_list.length / threads * i, meta_list.length / threads * (i + 1));
-                    ;
-                    promises.push(multi_thread(shared_data, sub_song, sub_meta));
-                }
-                Promise.all(promises).then((vals) => {
-                    cleanup_post_processing(shared_data);
-                });
+            // Multi-thread
+            let promises = [];
+            for (let i = 0; i < threads; i++) {
+                let sub_song = song_list.slice(song_list.length / threads * i, song_list.length / threads * (i + 1));
+                let sub_meta = meta_list.slice(meta_list.length / threads * i, meta_list.length / threads * (i + 1));
+                ;
+                promises.push(multi_thread(shared_data, sub_song, sub_meta));
             }
-        }));
+            Promise.all(promises).then(() => {
+                cleanup_post_processing(shared_data);;
+            }).catch(error => {
+                console.log(`Caught an error when splitting: ${error}`);
+            })
+        });
     }
 }
 
-function start_streaming() {
+function start_streaming(parent_dir) {
     console.log(`Starting stream recording: ${stream_uri}`);
     console.log("Creating new fs stream");
     stream_request = request
         .get(stream_uri)
         .on('error', (err) => {
             console.log(`Stream has encountered an error: ${err}.`);
-            force_stop = true;
-            dj_change();
-            force_stop = false;
-            dj_change();
+            teardown().then(() => dj_change());
         })
         .on('complete', () => {
             console.log(`Stream request completed, restarting.`);
-            force_stop = true;
-            dj_change();
-            force_stop = false;
-            dj_change();
+            teardown().then(() => dj_change());
         })
-        .pipe(fs.createWriteStream(path.join(folder, 'raw_recording.mp3'), { flags: 'w' }));
+        .pipe(fs.createWriteStream(path.format({
+            dir: path.join(
+                parent_dir,
+                folder
+            ),
+            base: "raw_recording.mp3"
+        }), { flags: 'w' }))
 }
 
-function dj_change() {
-    // Don't break the stream on a new dj
-    if (excluded_djs.includes(api.dj_name) || force_stop) {
-        if (force_stop) {
-            console.log("Force stop detected, stream is stopped.");
-        }
-        else {
-            console.log(`Excluded DJ ${api.dj_name} detected, skipping.`);
-        }
+function teardown() {
+    return new Promise(() => {
         if (stream_request != null) {
             stream_request.destroy();
             stream_request = null;
@@ -332,46 +334,63 @@ function dj_change() {
         if (last_rec) {
             let shared_data = {
                 date: rec_start,
-                raw_path: path.join(folder, 'raw_recording.mp3'),
-                folder: folder
+                raw_path: path.format({
+                    dir: path.join(
+                        export_folder,
+                        folder
+                    ),
+                    base: 'raw_recording.mp3'
+                }),
+                folder: path.join(export_folder, folder)
             };
-            process_recording(shared_data, return_copy(song_list), return_copy(metadata_list));
+            process_recording(shared_data, _.clone(song_list), _.clone(metadata_list));
             last_rec = false;
         }
         song_list = [];
         metadata_list = [];
         current_song = 1;
         rec_start = null;
-        return;
+    });
+}
+
+function dj_change() {
+    // Don't break the stream on a new dj
+    if (excluded_djs.includes(api.dj_name) || force_stop) {
+        if (!force_stop) {
+            console.log(`Excluded DJ ${api.dj_name} detected, skipping.`);
+        }
+        return teardown();
     }
-    console.log(api.dj_name + " has taken over.");
-    if (last_rec == false) {
-        folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-        fs.mkdir(folder + ' ' + api.dj_name, (err) => {
-            if (err && err.code != 'EEXIST') throw err;
-        });
-        fs.mkdir(folder, (err) => {
-            if (err && err.code != 'EEXIST') throw err;
+    return new Promise(() => {
+        console.log(api.dj_name + " has taken over.");
+        if (last_rec == false) {
+            folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
+            fs.mkdir(path.join(export_folder, `${folder} ${api.dj_name}`), (err) => {
+                if (err && err.code != 'EEXIST') throw err;
+            });
+            fs.mkdir(path.join(export_folder, folder), (err) => {
+                if (err && err.code != 'EEXIST') throw err;
+                current_song = 1;
+                console.log("Setting up the stream");
+                rec_start = api.current_time;
+                last_rec = true;
+                get_dj_pic();
+                song_change();
+                start_streaming(export_folder);
+            });
+            output_folders.push(folder + ' ' + api.dj_name);
+        }
+        else {
+            let new_folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
+            fs.mkdir(path.join(export_folder, `${new_folder} ${api.dj_name}`), (err) => {
+                if (err && err.code != 'EEXIST') throw err;
+            });
+            output_folders.push(new_folder + ' ' + api.dj_name);
             current_song = 1;
-            console.log("Setting up the stream");
-            rec_start = api.current_time;
-            last_rec = true;
             get_dj_pic();
             song_change();
-            start_streaming();
-        });
-        output_folders.push(folder + ' ' + api.dj_name);
-    }
-    else {
-        let new_folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-        fs.mkdir(new_folder + ' ' + api.dj_name, (err) => {
-            if (err && err.code != 'EEXIST') throw err;
-        });
-        output_folders.push(new_folder + ' ' + api.dj_name);
-        current_song = 1;
-        get_dj_pic();
-        song_change();
-    }
+        }
+    });
 }
 
 function poll_api() {
@@ -434,15 +453,12 @@ function poll_server() {
 }
 
 
-// Setup/Start
-poll_api();
-poll_server();
-setTimeout(() => {
+function start_server() {
     console.log("Starting the server");
-    setInterval(poll_api, poll_interval);
-    http.createServer(function (req, res) {
+    http_server = http.createServer(function (req, res) {
         if (req.url == "/stop") {
             force_stop = true;
+            console.log("Force stopping the stream.");
             dj_change();
             res.write("Stream stopping");
         }
@@ -467,7 +483,17 @@ setTimeout(() => {
         }
         res.end();
     }).listen(8080);
-}, 1000);
+}
+
+function start_polling() {
+    force_stop = false;
+    poll_api();
+    poll_server();
+    setTimeout(() => {
+        polling_interval_id = setInterval(poll_api, poll_interval);
+    }, 1000);
+}
+
 var schema = buildSchema(`
     type Query {
         api: api_obj
@@ -570,7 +596,7 @@ var getConfigData = () => {
     };
 };
 var getPastRecordings = () => {
-    let dirs = fs.readdirSync('.', { withFileTypes: true }).filter(file => (file.isDirectory() && file.name.split(' ').length === 2)).map(dir => dir.name);
+    let dirs = fs.readdirSync(export_folder, { withFileTypes: true }).filter(file => (file.isDirectory() && file.name.split(' ').length === 2)).map(dir => dir.name);
     let result = [];
     dirs.forEach((dir) => {
         result.push({ folder: dir, songs: getRecordedSongs(dir) });
@@ -596,7 +622,15 @@ var updateConfig = (data: UpdateDataObject) => {
     stream_uri = data.config.stream_uri;
     poll_interval = data.config.poll_interval;
     excluded_djs = data.config.excluded_djs;
-    export_folder = data.config.export_folder;
+    let new_export_path = path.format(path.parse(data.config.export_folder));
+    if (export_folder !== new_export_path && !force_stop) {
+        teardown();
+        fs.mkdir(new_export_path, (err) => {
+            if (err && err.code != 'EEXIST') throw err;
+        });
+        export_folder = new_export_path;
+        dj_change();
+    }
     dj_change();
     return "Changed";
 };
@@ -616,11 +650,37 @@ var root = {
     printLog: printLog,
 };
 // GraphQL endpoint
-var app = express();
-app.use(cors()); // For graphql over http
-app.use('/graphql', express_graphql({
-    schema: schema,
-    rootValue: root,
-    graphiql: true
-}));
-app.listen(4000, () => console.log('Express GraphQL Server Now Running On localhost:4000/graphql'));
+function start_graqphl() {
+    app = express();
+    app.use(cors()); // For graphql over http
+    app.use('/graphql', express_graphql({
+        schema: schema,
+        rootValue: root,
+        graphiql: true
+    }));
+    app.listen(4000, () => console.log('Express GraphQL Server Now Running On localhost:4000/graphql'));
+}
+
+function stop_everything() {
+    http_server.close();
+    app.close()
+    clearInterval(polling_interval_id);
+}
+
+const cli_opts = [
+    { name: "load_config", alias: "l", type: String }
+]
+
+const options = cli_args(cli_opts);
+if (options.load_config) {
+    let load_config = fs.readFileSync(options.load_config);
+    updateConfig(load_config);
+}
+
+fs.mkdir(export_folder, (err) => {
+    if (err && err.code != 'EEXIST') throw err;
+});
+
+start_graqphl();
+start_server();
+start_polling();
