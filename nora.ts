@@ -673,7 +673,7 @@ const cli_opts = [
 
 const options = cli_args(cli_opts);
 if (options.load_config) {
-    let load_config = fs.readFileSync(options.load_config);
+    let load_config = JSON.parse(fs.readFileSync(options.load_config));
     updateConfig(load_config);
 }
 
