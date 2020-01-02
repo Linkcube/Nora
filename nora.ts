@@ -605,14 +605,14 @@ var getPastRecordings = () => {
     return { recordings: result.slice(0, max_dirs_sent) };
 };
 var getRecordedSongs = (folder) => {
-    let dirs = fs.readdirSync(folder, { withFileTypes: true }).filter(file => (file.isFile() && file.name.split(' ').length > 1));
+    let dirs = fs.readdirSync(path.join(export_folder, folder), { withFileTypes: true }).filter(file => (file.isFile() && file.name.split(' ').length > 1));
     dirs.sort((a, b) => {
         return a.name.split('.')[0] - b.name.split('.')[0];
     });
     return dirs.map(dir => dir.name);
 };
 var getRecordingSongs = (data) => {
-    let dirs = fs.readdirSync(data.folder, { withFileTypes: true }).filter(file => (file.isFile() && file.name.split(' ').length > 1));
+    let dirs = fs.readdirSync(path.join(export_folder, data.folder), { withFileTypes: true }).filter(file => (file.isFile() && file.name.split(' ').length > 1));
     return { songs: dirs.map(dir => dir.name) };
 };
 var updateConfig = (data: UpdateDataObject) => {
