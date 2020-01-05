@@ -8,6 +8,7 @@ var http = require('http');
 var https = require('https');
 var fs = require('fs');
 var path = require('path');
+var url = require('url');
 var rmdir = require('rimraf');
 var sane_fs = require('sanitize-filename');
 var request = require('request');
@@ -89,7 +90,7 @@ var last_rec: Boolean = false;
 var output_folders: string[] = [];
 var excluded_djs: string[] = ["Hanyuu-sama"];
 var split_character: string = " - ";
-var max_dirs_sent: number = 10;
+var max_dirs_sent: number = 0; // 0 = unlimited
 interface SharedDataObject {
     date: number,
     raw_path: string,
@@ -454,35 +455,18 @@ function poll_server() {
 
 
 function start_server() {
-    console.log("Starting the server");
-    http_server = http.createServer(function (req, res) {
-        if (req.url == "/stop") {
-            force_stop = true;
-            console.log("Force stopping the stream.");
-            dj_change();
-            res.write("Stream stopping");
-        }
-        if (req.url == "/start") {
-            if (force_stop) {
-                force_stop = false;
-                dj_change();
-                res.write("Stream starting");
-            }
-        }
-        if (req.url == "/refresh") {
-            dj_change();
-            res.write("Refreshed!");
-        }
-        if (req.url == "/include") {
-            excluded_djs = ["xHanyuu-sama"];
-            res.write("Including Hanyuu");
-        }
-        if (req.url == "/exclude") {
-            excluded_djs = ["Hanyuu-sama"];
-            res.write("Excluding Hanyuu");
-        }
-        res.end();
-    }).listen(8080);
+    app = express();
+    app.use(cors()); // For graphql over http
+    app.use('/graphql', express_graphql({
+        schema: schema,
+        rootValue: root,
+        graphiql: true
+    }));
+    app.listen(4000, () => console.log('Express GraphQL Server Now Running On localhost:4000/graphql'));
+    http_server = http.createServer(app)
+    app.use(express.static(path.resolve(export_folder)));
+    http_server.listen(8080);
+    console.log("HTTP server running on localhost:8080");
 }
 
 function start_polling() {
@@ -502,11 +486,13 @@ var schema = buildSchema(`
         misc: misc_data
         config: config_data
         past_recordings: all_recordings
-        recording_songs(folder: String!): songs_data
+        recording_cover(folder: String!): cover_data
+        full_recording(folder: String!): full_recording_data
     },
     type Mutation {
         updateConfig(config: new_config): String
         printLog(msg: String): String
+        streamAction(action: String): String
     }
     type api_obj {
         np: String
@@ -552,9 +538,13 @@ var schema = buildSchema(`
     }
     type recordings_data {
         folder: String
-        songs: [String]
+        songs: Int
+        cover: String
     }
-    type songs_data {
+    type cover_data {
+        cover: String
+    }
+    type full_recording_data {
         songs: [String]
     }
     input new_config {
@@ -596,25 +586,55 @@ var getConfigData = () => {
     };
 };
 var getPastRecordings = () => {
-    let dirs = fs.readdirSync(export_folder, { withFileTypes: true }).filter(file => (file.isDirectory() && file.name.split(' ').length === 2)).map(dir => dir.name);
+    let dirs = fs.readdirSync(export_folder, { withFileTypes: true }).filter(
+        file => (file.isDirectory() && file.name.split(' ').length === 2)
+    ).map(dir => dir.name);
     let result = [];
+    dirs.reverse();
+    if (max_dirs_sent > 0) dirs = dirs.slice(0, max_dirs_sent);
     dirs.forEach((dir) => {
-        result.push({ folder: dir, songs: getRecordedSongs(dir) });
+        result.push({ folder: dir, songs: getSongCount(dir), cover: getRecordingCoverPath(dir) });
     });
-    result.reverse();
-    return { recordings: result.slice(0, max_dirs_sent) };
+    return { recordings: result };
 };
-var getRecordedSongs = (folder) => {
-    let dirs = fs.readdirSync(path.join(export_folder, folder), { withFileTypes: true }).filter(file => (file.isFile() && file.name.split(' ').length > 1));
+var getRecordedSongs = (data) => {
+    let dirs = fs.readdirSync(path.join(export_folder, data.folder), { withFileTypes: true }).filter(
+        file => (file.isFile() && file.name.split(' ').length > 1)
+    );
     dirs.sort((a, b) => {
         return a.name.split('.')[0] - b.name.split('.')[0];
     });
-    return dirs.map(dir => dir.name);
+    return { songs: dirs.map(dir => dir.name)};
 };
 var getRecordingSongs = (data) => {
-    let dirs = fs.readdirSync(path.join(export_folder, data.folder), { withFileTypes: true }).filter(file => (file.isFile() && file.name.split(' ').length > 1));
+    let dirs = fs.readdirSync(path.join(export_folder, data.folder), { withFileTypes: true }).filter(
+        file => (file.isFile() && file.name.split(' ').length > 1)
+    );
     return { songs: dirs.map(dir => dir.name) };
 };
+var getSongCount = (folder) => {
+    let dirs = fs.readdirSync(path.join(export_folder, folder), { withFileTypes: true }).filter(
+        file => (file.isFile() && file.name.split(' ').length > 1)
+    );
+    return dirs.length;
+};
+var getRecordingCover = (data) => {
+    let cover = fs.readdirSync(path.join(export_folder, data.folder), { withFileTypes: true }).filter(
+        file => (file.isFile() && file.name.split('.').slice(0, 1).join('.') === "cover")
+    );
+    let cover_path = path.join(export_folder, data.folder, cover[0].name);
+
+    return { cover: fs.readFileSync(cover_path, 'base64')};
+}
+var getRecordingCoverPath = (folder) => {
+    let cover = fs.readdirSync(path.join(export_folder, folder), { withFileTypes: true }).filter(
+        file => (file.isFile() && file.name.split('.').slice(0, 1).join('.') === "cover")
+    );
+    if (_.isEmpty(cover)) {
+        return null;
+    }
+    return encodeURI(path.join(folder, cover[0].name));
+}
 var updateConfig = (data: UpdateDataObject) => {
     console.log(data);
     api_uri = data.config.api_uri;
@@ -634,6 +654,20 @@ var updateConfig = (data: UpdateDataObject) => {
     dj_change();
     return "Changed";
 };
+var streamAction = (data) => {
+    console.log(data);
+    if (data.action === "stop") {
+        force_stop = true;
+        dj_change();
+    } else if (data.action === "start") {
+        if (force_stop) {
+            force_stop = false;
+            dj_change();
+        }
+    } else if (data.action === "refresh") {
+        teardown().then(() => dj_change());
+    }
+}
 var printLog = (msg: string) => {
     console.log(msg);
     return msg;
@@ -646,8 +680,10 @@ var root = {
     config: getConfigData,
     updateConfig: updateConfig,
     past_recordings: getPastRecordings,
-    recording_songs: getRecordingSongs,
+    recording_cover: getRecordingCover,
+    full_recording: getRecordedSongs,
     printLog: printLog,
+    streamAction: streamAction,
 };
 // GraphQL endpoint
 function start_graqphl() {
@@ -662,8 +698,8 @@ function start_graqphl() {
 }
 
 function stop_everything() {
-    http_server.close();
     app.close()
+    http_server.close();
     clearInterval(polling_interval_id);
 }
 
@@ -681,6 +717,5 @@ fs.mkdir(export_folder, (err) => {
     if (err && err.code != 'EEXIST') throw err;
 });
 
-start_graqphl();
 start_server();
 start_polling();
