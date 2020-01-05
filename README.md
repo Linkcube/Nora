@@ -14,11 +14,7 @@ Use the `--help` flag for more options.
 Mac users may have to include `npx` before the ts-node command
 
 ## Basic Control Endpoints
-Stop recording: `http://localhost:8080/stop`
-
-Restart recording: `http://localhost:8080/refresh`
-
-Start recording (from a stopped state): `http://localhost:8080/start`
+These have been removed, please use [Svelte Radio Interface](https://github.com/Linkcube/svelte-radio-interface) for managing nora.
 
 ## Editable Variables
 Description | Type | Example
