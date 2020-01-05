@@ -8,7 +8,8 @@ cd to the directory you've placed this repo.
 
 Install: `npm install`
 
-Running: `ts-node nora.ts`
+Running: `ts-node nora.ts -s`
+Use the `--help` flag for more options.
 
 Mac users may have to include `npx` before the ts-node command
 
@@ -31,4 +32,4 @@ Usage (shorthand) | Description | Example
 --- | --- | ---
 --load_config (-l) | Load a config file | `-l radio.json`
 
-[Nai](https://github.com/linkcube/nai), the complimenting UI to this project manages many of the safe value changes so there's no real need to mess around with them.
+[Svelte Radio Interface](https://github.com/Linkcube/svelte-radio-interface), the complimenting UI to this project manages many of the safe value changes so there's no real need to mess around with them.
