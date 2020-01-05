@@ -545,7 +545,12 @@ var schema = buildSchema(`
         cover: String
     }
     type full_recording_data {
-        songs: [String]
+        songs: [song_data]
+    }
+    type song_data {
+        title: String
+        artist: String
+        file: String
     }
     input new_config {
         api_uri: String
@@ -604,14 +609,12 @@ var getRecordedSongs = (data) => {
     dirs.sort((a, b) => {
         return a.name.split('.')[0] - b.name.split('.')[0];
     });
-    return { songs: dirs.map(dir => dir.name)};
+    return { songs: dirs.map(dir => getSongMetadata(path.join(export_folder, data.folder), dir.name))};
 };
-var getRecordingSongs = (data) => {
-    let dirs = fs.readdirSync(path.join(export_folder, data.folder), { withFileTypes: true }).filter(
-        file => (file.isFile() && file.name.split(' ').length > 1)
-    );
-    return { songs: dirs.map(dir => dir.name) };
-};
+var getSongMetadata = (folder, file) => {
+    let tags = NodeID3.read(path.join(folder, file));
+    return { title: tags.title, artist: tags.artist, file: file };
+}
 var getSongCount = (folder) => {
     let dirs = fs.readdirSync(path.join(export_folder, folder), { withFileTypes: true }).filter(
         file => (file.isFile() && file.name.split(' ').length > 1)
