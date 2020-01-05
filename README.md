@@ -31,5 +31,9 @@ Export Folder | String | `export_folder = "."`
 Usage (shorthand) | Description | Example
 --- | --- | ---
 --load_config (-l) | Load a config file | `-l radio.json`
+--process (-p) | Process a previous recording | `-p my_recording`
+--start (-s) | Start the main program | `-s`
+
+When using `--load_config`, it must be used in conjunction with `--start`, i.e `ts-node nora.ts -l config.json --start`
 
 [Svelte Radio Interface](https://github.com/Linkcube/svelte-radio-interface), the complimenting UI to this project manages many of the safe value changes so there's no real need to mess around with them.
