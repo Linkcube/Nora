@@ -37,7 +37,7 @@ export const usage = commandLineUsage(sections);
 
 export const cli_opts = [
     { name: "load_config", alias: "l", type: String },
-    { name: "start", type: Boolean },
+    { name: "start", alias: "s", type: Boolean },
     { name: "process", alias: "p", type: String },
     { name: "help", alias: "h", type: Boolean }
 ];
