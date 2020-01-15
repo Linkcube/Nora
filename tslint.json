@@ -1,6 +1,6 @@
 {
     "extends": "tslint:recommended",
-    "rulesDirectory": ["index.ts", "helpers/"],
+    "rulesDirectory": ["index.ts", "cli_start.ts", "helpers/"],
     "rules": {
         "max-line-length": {
             "options": [120]
