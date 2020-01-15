@@ -1,13 +1,19 @@
 {
-  "name": "nora",
-  "version": "1.0.3",
+  "name": "linkcube-nora",
+  "version": "1.0.4",
   "description": "Nodejs R/a/dio Archiver",
-  "main": "nora.js",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "format": "prettier --write \"helpers/**/*.ts\" \"index.ts\"",
-    "lint": "tslint -p tsconfig.json -c tslint.json --fix"
+    "format": "prettier --write \"helpers/**/*.ts\" \"index.ts\" \"cli_start.ts\"",
+    "lint": "tslint -p tsconfig.json -c tslint.json --fix",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run lint",
+    "preversion": "npm run lint",
+    "version": "npm run format && git add -A helpers && git add -A index.ts",
+    "postversion": "git push && git push --tags"
   },
   "repository": {
     "type": "git",
@@ -45,5 +51,6 @@
     "tslint-config-prettier": "^1.18.0",
     "typescript": "^3.7.2"
   },
-  "files": ["lib/**/*"]
+  "files": ["lib/**/*"],
+  "bin": "lib/cli_start.js"
 }

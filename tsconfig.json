@@ -6,6 +6,6 @@
       "outDir": "./lib",
       "strict": true
     },
-    "include": ["helpers", "index.ts"],
+    "include": ["helpers", "index.ts", "cli_start.ts"],
     "exclude": ["node_modules", "**/__tests__/*"]
   }

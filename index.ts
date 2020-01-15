@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { SCHEMA } from "./helpers/schema";
 import { format_seconds, print, resolve_after_get } from "./helpers/shared_functions";
 import {
@@ -18,13 +20,11 @@ const path = require("path");
 const sane_fs = require("sanitize-filename");
 const request = require("request");
 const _ = require("lodash");
-const cli_args = require("command-line-args");
 const express = require("express");
 const express_graphql = require("express-graphql");
 const cors = require("cors");
 const recording_reader = require("./helpers/recording_reader");
 const recording_processor = require("./helpers/recording_processor");
-const cli = require("./helpers/cli");
 let api_uri: string = "https://r-a-d.io/api";
 let server_uri: string = "https://stream.r-a-d.io/status-json.xsl";
 let stream_uri: string = "https://relay0.r-a-d.io/main.mp3";
@@ -388,19 +388,15 @@ const root = {
   streamAction,
 };
 
-function stop_everything() {
+export function stop_everything() {
   app.close();
   http_server.close();
   clearInterval(polling_interval_id);
 }
 
-const options = cli_args(cli.cli_opts);
-
-if (options.process) {
-  recording_processor.process_recording(options.process);
-} else if (options.start) {
-  if (options.config) {
-    const config = JSON.parse(fs.readFileSync(options.config));
+export function initial_start(config_file: string) {
+  if (config_file) {
+    const config = JSON.parse(fs.readFileSync(config_file));
     updateConfig(config);
   }
 
@@ -413,6 +409,4 @@ if (options.process) {
   recording_reader.update_reader(export_folder);
   start_server();
   start_polling();
-} else {
-  print(cli.usage);
 }
