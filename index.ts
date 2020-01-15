@@ -7,35 +7,35 @@ import {
 } from './helpers/types';
 import { Schema } from './helpers/schema';
 
-var app; // express app
-var http_server;
-var polling_interval_id;
-var rp = require('request-promise');
-var http = require('http');
-var fs = require('fs');
-var path = require('path');
-var sane_fs = require('sanitize-filename');
-var request = require('request');
-var _ = require('lodash');
-var cli_args = require('command-line-args');
-var express = require('express');
-var express_graphql = require('express-graphql');
-var cors = require('cors');
-var recording_reader = require('./helpers/recording_reader');
-var recording_processor = require('./helpers/recording_processor');
-var cli = require('./helpers/cli');
-var api_uri: string = "https://r-a-d.io/api";
-var server_uri: string = "https://stream.r-a-d.io/status-json.xsl";
-var stream_uri: string = "https://relay0.r-a-d.io/main.mp3";
-var poll_interval: number = 5000;
-var server: ServerObject = {
+let app; // express app
+let http_server;
+let polling_interval_id;
+const rp = require('request-promise');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const sane_fs = require('sanitize-filename');
+const request = require('request');
+const _ = require('lodash');
+const cli_args = require('command-line-args');
+const express = require('express');
+const express_graphql = require('express-graphql');
+const cors = require('cors');
+const recording_reader = require('./helpers/recording_reader');
+const recording_processor = require('./helpers/recording_processor');
+const cli = require('./helpers/cli');
+let api_uri: string = "https://r-a-d.io/api";
+let server_uri: string = "https://stream.r-a-d.io/status-json.xsl";
+let stream_uri: string = "https://relay0.r-a-d.io/main.mp3";
+let poll_interval: number = 5000;
+let server: ServerObject = {
     bitrate: 0,
     sample_rate: 0,
     audio_format: "",
     server_name: "",
     server_description: ""
 };
-var api: ApiObject = {
+let api: ApiObject = {
     np: "",
     listeners: 0,
     dj_name: "",
@@ -45,19 +45,19 @@ var api: ApiObject = {
     current_time: 0,
     lp: [],
 };
-var current_song: number = 1;
-var stream_request;
-var folder: string = "";
-var export_folder: string = path.join(".", "recordings_folder");
-var song_list: SongObject[] = [];
-var metadata_list: MetaDataObject[] = [];
-var rec_start: number;
-var cover_path: string = "";
-var force_stop: Boolean = true;
-var last_rec: Boolean = false;
-var output_folders: string[] = [];
-var excluded_djs: string[] = ["Hanyuu-sama"];
-var split_character: string = " - ";
+let current_song: number = 1;
+let stream_request;
+let folder: string = "";
+let export_folder: string = path.join(".", "recordings_folder");
+let song_list: SongObject[] = [];
+let metadata_list: MetaDataObject[] = [];
+let rec_start: number;
+let cover_path: string = "";
+let force_stop: Boolean = true;
+let last_rec: Boolean = false;
+let output_folders: string[] = [];
+let excluded_djs: string[] = ["Hanyuu-sama"];
+let split_character: string = " - ";
 
 function resolve_after_get(x: string) {
     return rp(x).then(function (result: string) {
@@ -66,13 +66,13 @@ function resolve_after_get(x: string) {
 };
 
 function format_seconds(seconds: number) {
-    var measuredTime = new Date(null);
+    let measuredTime = new Date(null);
     measuredTime.setSeconds(seconds);
     return measuredTime.toISOString().substr(11, 8);
 };
 
 function gen_song_meta(filename: string) {
-    var song_name, artist;
+    let song_name, artist;
     if (api.np.split(split_character).length === 2) {
         song_name = api.np.split(split_character)[1];
         artist = api.np.split(split_character)[0];
@@ -221,7 +221,7 @@ function dj_change() {
 function poll_api() {
     resolve_after_get(api_uri).then((results) => {
         try {
-            var old_np, old_dj;
+            let old_np, old_dj;
             if (Object.keys(api).length != 0) {
                 old_np = api.np;
                 old_dj = api.dj_name;
@@ -260,8 +260,8 @@ function poll_api() {
 function poll_server() {
     resolve_after_get(server_uri).then((results) => {
         try {
-            var stats = results.icestats.source[0];
-            var stream = results.icestats.source[1];
+            let stats = results.icestats.source[0];
+            let stream = results.icestats.source[1];
             server = {
                 bitrate: stats.bitrate,
                 sample_rate: stats.samplerate,
@@ -301,15 +301,15 @@ function start_polling() {
     }, 1000);
 };
 
-var getApi = () => {
+const getApi = () => {
     return api;
 };
 
-var getServer = () => {
+const getServer = () => {
     return server;
 };
 
-var isValidDj = () => {
+const isValidDj = () => {
     let valid = {
         valid_dj: !(excluded_djs.includes(api.dj_name)),
         force_stop: force_stop,
@@ -317,14 +317,14 @@ var isValidDj = () => {
     return valid;
 };
 
-var getMiscData = () => {
+const getMiscData = () => {
     return {
         dj_image_link: api_uri + "/dj-image/" + api.dj_pic,
         rec_start: rec_start
     };
 };
 
-var getConfigData = () => {
+const getConfigData = () => {
     return {
         api_uri: api_uri,
         server_uri: server_uri,
@@ -335,7 +335,7 @@ var getConfigData = () => {
     };
 };
 
-var updateConfig = (data: UpdateDataObject) => {
+const updateConfig = (data: UpdateDataObject) => {
     console.log(data);
     api_uri = data.config.api_uri;
     server_uri = data.config.server_uri;
@@ -361,7 +361,7 @@ var updateConfig = (data: UpdateDataObject) => {
     return "Changed";
 };
 
-var streamAction = (data) => {
+const streamAction = (data) => {
     console.log(data);
     if (data.action === "stop") {
         force_stop = true;
@@ -375,12 +375,12 @@ var streamAction = (data) => {
         teardown().then(() => dj_change());
     }
 }
-var printLog = (msg: string) => {
+const printLog = (msg: string) => {
     console.log(msg);
     return msg;
 };
 
-var root = {
+const root = {
     api: getApi,
     server: getServer,
     valid: isValidDj,

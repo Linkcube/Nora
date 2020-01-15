@@ -4,11 +4,11 @@ import {
     SharedDataObject
 } from './types';
 
-var fs = require('fs');
-var path = require('path');
-var rmdir = require('rimraf');
-var NodeID3 = require('node-id3');
-var ffmpeg = require('fluent-ffmpeg');
+const fs = require('fs');
+const path = require('path');
+const rmdir = require('rimraf');
+const NodeID3 = require('node-id3');
+const ffmpeg = require('fluent-ffmpeg');
 // Platform agnostic ffmpeg/ffprobe install
 const ffmpegPath: string = require('@ffmpeg-installer/ffmpeg').path;
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -16,7 +16,7 @@ const ffprobePath: string = require('@ffprobe-installer/ffprobe').path;
 ffmpeg.setFfprobePath(ffprobePath);
 
 function format_seconds(seconds: number) {
-    var measuredTime = new Date(null);
+    let measuredTime = new Date(null);
     measuredTime.setSeconds(seconds);
     return measuredTime.toISOString().substr(11, 8);
 }

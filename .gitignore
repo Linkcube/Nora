@@ -4,3 +4,6 @@ package-lock.json
 
 # recordings folder
 recordings_folder
+
+# Built files
+lib
