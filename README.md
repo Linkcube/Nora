@@ -8,7 +8,7 @@ cd to the directory you've placed this repo.
 
 Install: `npm install`
 
-Running: `ts-node nora.ts -s`
+Running: `ts-node index.ts -s`
 Use the `--help` flag for more options.
 
 Mac users may have to include `npx` before the ts-node command
@@ -26,10 +26,10 @@ Export Folder | String | `export_folder = "."`
 ## CLI args
 Usage (shorthand) | Description | Example
 --- | --- | ---
---load_config (-l) | Load a config file | `-l radio.json`
+--config (-c) | Load a config file | `-c radio.json`
 --process (-p) | Process a previous recording | `-p my_recording`
 --start (-s) | Start the main program | `-s`
 
-When using `--load_config`, it must be used in conjunction with `--start`, i.e `ts-node nora.ts -l config.json --start`
+When using `--config`, it must be used in conjunction with `--start`, i.e `ts-node nora.ts -c config.json --start`
 
 [Svelte Radio Interface](https://github.com/Linkcube/svelte-radio-interface), the complimenting UI to this project manages many of the safe value changes so there's no real need to mess around with them.

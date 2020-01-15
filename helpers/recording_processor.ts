@@ -1,4 +1,4 @@
-import { print } from "./shared_functions";
+import { format_seconds, print } from "./shared_functions";
 import { IErrorType, IMetaDataObject, ISharedDataObject, ISongObject } from "./types";
 
 const fs = require("fs");
@@ -11,12 +11,6 @@ const ffmpegPath: string = require("@ffmpeg-installer/ffmpeg").path;
 ffmpeg.setFfmpegPath(ffmpegPath);
 const ffprobePath: string = require("@ffprobe-installer/ffprobe").path;
 ffmpeg.setFfprobePath(ffprobePath);
-
-function format_seconds(seconds: number) {
-  const measuredTime = new Date(0);
-  measuredTime.setSeconds(seconds);
-  return measuredTime.toISOString().substr(11, 8);
-}
 
 function multi_thread(shared_data: ISharedDataObject, song_list: ISongObject[], meta_list: IMetaDataObject[]) {
   return new Promise(async (resolve, reject) => {
@@ -113,7 +107,7 @@ export function process_recording(folder: any) {
       }
       // Calculate duration of each song
       let song_count = 0;
-      song_list.forEach(song => {
+      song_list.forEach((song) => {
         let duration;
         if (song_count === song_list.length - 1) {
           duration = data.format.duration;
