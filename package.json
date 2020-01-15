@@ -4,7 +4,10 @@
   "description": "Nodejs R/a/dio Archiver",
   "main": "nora.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "format": "prettier --write \"helpers/**/*.ts\" \"index.ts\"",
+    "lint": "tslint -p tsconfig.json -c tslint.json --fix"
   },
   "repository": {
     "type": "git",
@@ -36,7 +39,11 @@
   },
   "devDependencies": {
     "@types/node": "^12.12.21",
+    "prettier": "^1.19.1",
     "ts-node": "^8.5.2",
+    "tslint": "^5.20.1",
+    "tslint-config-prettier": "^1.18.0",
     "typescript": "^3.7.2"
-  }
+  },
+  "files": ["lib/**/*"]
 }

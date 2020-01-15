@@ -1,65 +1,78 @@
-var fs = require('fs');
-var path = require('path');
-var NodeID3 = require('node-id3');
-var _ = require('lodash');
+import { readdirSync, readFileSync } from "fs";
+import { join } from "path";
+import { IPastRecording } from "./types";
+const nodeID3 = require("node-id3");
+const _ = require("lodash");
 
-let export_folder;
-let max_dirs_sent = 0;
+let export_folder: string;
+const maxDirsSent = 0;
 
-export function update_reader(new_export_folder) {
-    export_folder = new_export_folder;
+export function update_reader(new_export_folder: string) {
+  export_folder = new_export_folder;
 }
 
-export var getPastRecordings = () => {
-    let dirs = fs.readdirSync(export_folder, { withFileTypes: true }).filter(
-        file => (file.isDirectory() && file.name.split(' ').length === 2)
-    ).map(dir => dir.name);
-    let result = [];
-    dirs.reverse();
-    if (max_dirs_sent > 0) dirs = dirs.slice(0, max_dirs_sent);
-    dirs.forEach((dir) => {
-        result.push({ folder: dir, songs: getSongCount(dir), cover: getRecordingCoverPath(dir) });
-    });
-    return { recordings: result };
+export const getPastRecordings = () => {
+  let dirs = readdirSync(export_folder, { withFileTypes: true })
+    .filter((file: any) => file.isDirectory() && file.name.split(" ").length === 2)
+    .map((dir: any) => dir.name);
+  const result: IPastRecording[] = [];
+  dirs.reverse();
+  if (maxDirsSent > 0) {
+    dirs = dirs.slice(0, maxDirsSent);
+  }
+  dirs.forEach((dir: any) => {
+    result.push({ folder: dir, songs: getSongCount(dir), cover: getRecordingCoverPath(dir) });
+  });
+  return { recordings: result };
 };
 
-export var getRecordedSongs = (data) => {
-    let dirs = fs.readdirSync(path.join(export_folder, data.folder), { withFileTypes: true }).filter(
-        file => (file.isFile() && file.name.split(' ').length > 1)
-    );
-    dirs.sort((a, b) => {
-        return a.name.split('.')[0] - b.name.split('.')[0];
-    });
-    return { songs: dirs.map(dir => getSongMetadata(path.join(export_folder, data.folder), dir.name))};
+export const getRecordedSongs = (data: { folder: string }) => {
+  const dirs = readdirSync(join(export_folder, data.folder), { withFileTypes: true }).filter(
+    (file: any) => file.isFile() && file.name.split(" ").length > 1,
+  );
+  dirs.sort((a: any, b: any) => {
+    return a.name.split(".")[0] - b.name.split(".")[0];
+  });
+  return { songs: dirs.map((dir: any) => getSongMetadata(join(export_folder, data.folder), dir.name)) };
 };
 
-var getSongMetadata = (folder, file) => {
-    let tags = NodeID3.read(path.join(folder, file));
-    return { title: tags.title, artist: tags.artist, file: file };
-}
-
-var getSongCount = (folder) => {
-    let dirs = fs.readdirSync(path.join(export_folder, folder), { withFileTypes: true }).filter(
-        file => (file.isFile() && file.name.split(' ').length > 1)
-    );
-    return dirs.length;
+const getSongMetadata = (folder: string, file: string) => {
+  const tags = nodeID3.read(join(folder, file));
+  return { title: tags.title, artist: tags.artist, file };
 };
 
-export var getRecordingCover = (data) => {
-    let cover = fs.readdirSync(path.join(export_folder, data.folder), { withFileTypes: true }).filter(
-        file => (file.isFile() && file.name.split('.').slice(0, 1).join('.') === "cover")
-    );
-    let cover_path = path.join(export_folder, data.folder, cover[0].name);
-
-    return { cover: fs.readFileSync(cover_path, 'base64')};
+const getSongCount = (folder: string) => {
+  const dirs = readdirSync(join(export_folder, folder), { withFileTypes: true }).filter(
+    (file: any) => file.isFile() && file.name.split(" ").length > 1,
+  );
+  return dirs.length;
 };
 
-var getRecordingCoverPath = (folder) => {
-    let cover = fs.readdirSync(path.join(export_folder, folder), { withFileTypes: true }).filter(
-        file => (file.isFile() && file.name.split('.').slice(0, 1).join('.') === "cover")
-    );
-    if (_.isEmpty(cover)) {
-        return null;
-    }
-    return encodeURI(path.join(folder, cover[0].name));
+export const getRecordingCover = (data: { folder: string }) => {
+  const cover = readdirSync(join(export_folder, data.folder), { withFileTypes: true }).filter(
+    (file: any) =>
+      file.isFile() &&
+      file.name
+        .split(".")
+        .slice(0, 1)
+        .join(".") === "cover",
+  );
+  const coverPath = join(export_folder, data.folder, cover[0].name);
+
+  return { cover: readFileSync(coverPath, "base64") };
+};
+
+const getRecordingCoverPath = (folder: string) => {
+  const cover = readdirSync(join(export_folder, folder), { withFileTypes: true }).filter(
+    (file: any) =>
+      file.isFile() &&
+      file.name
+        .split(".")
+        .slice(0, 1)
+        .join(".") === "cover",
+  );
+  if (_.isEmpty(cover)) {
+    return null;
+  }
+  return encodeURI(join(folder, cover[0].name));
 };
