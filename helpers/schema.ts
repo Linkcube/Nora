@@ -1,6 +1,6 @@
-const { buildSchema } = require('graphql');
+const { buildSchema } = require("graphql");
 
-export let Schema = buildSchema(`
+export let SCHEMA = buildSchema(`
     type Query {
         api: api_obj
         server: server_obj

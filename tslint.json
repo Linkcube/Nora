@@ -10,9 +10,12 @@
         "no-bitwise": true,
         "no-conditional-assignment": true,
         "no-consecutive-blank-lines": false,
-        "no-console": {
-            "severity": "warning",
-            "options": ["debug", "info", "log", "time", "timeEnd", "trace"]
+        "no-console": false,
+        "object-literal-sort-keys": false,
+        "no-require-imports": false,
+        "no-var-requires": false,
+        "variable-name": {
+            "options": ["allow-snake-case"]
         }
     },
     "jsRules": {
