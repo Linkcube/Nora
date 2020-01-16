@@ -107,7 +107,7 @@ export function process_recording(folder: any) {
       }
       // Calculate duration of each song
       let song_count = 0;
-      song_list.forEach(song => {
+      song_list.forEach((song) => {
         let duration;
         if (song_count === song_list.length - 1) {
           duration = data.format.duration;
@@ -139,7 +139,7 @@ export function process_recording(folder: any) {
         .then(() => {
           cleanup_post_processing(shared_data);
         })
-        .catch(error => {
+        .catch((error) => {
           print(`Caught an error when splitting: ${error}`);
         });
     });

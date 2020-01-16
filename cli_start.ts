@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { process_recording } from "./helpers/recording_processor";
 import { cli_opts, usage } from "./helpers/cli";
+import { process_recording } from "./helpers/recording_processor";
 import { print } from "./helpers/shared_functions";
 import { initial_start } from "./index";
 
