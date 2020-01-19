@@ -10,9 +10,6 @@ Running: `npx linkcube-nora --start`
 
 Use the `--help` flag for more options.
 
-## Basic Control Endpoints
-These have been removed, please use [Svelte Radio Interface](https://github.com/Linkcube/svelte-radio-interface) for managing nora.
-
 ## Editable Variables
 Description | Type | Example
 --- | --- | ---
@@ -29,4 +26,9 @@ Usage (shorthand) | Description | Example
 
 When using `--config`, it must be used in conjunction with `--start`, i.e `ts-node nora.ts -c config.json --start`
 
-[Svelte Radio Interface](https://github.com/Linkcube/svelte-radio-interface), the complimenting UI to this project manages many of the safe value changes so there's no real need to mess around with them.
+svelte-radio-interface, the complimenting UI to this project manages many of the safe value changes so there's no real need to mess around with them directly.
+
+## Links
+svelte-radio-interface: [github](https://github.com/Linkcube/svelte-radio-interface) [npm](https://www.npmjs.com/package/svelte-radio-interface)
+
+Nora: [github](https://github.com/Linkcube/Nora) [npm](https://www.npmjs.com/package/linkcube-nora)
