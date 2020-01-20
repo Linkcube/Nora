@@ -368,7 +368,9 @@ const streamAction = (data: { action: string }) => {
   } else if (data.action === "refresh") {
     teardown().then(() => dj_change());
   }
+  return true;
 };
+
 const printLog = (msg: string) => {
   print(msg);
   return msg;
