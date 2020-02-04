@@ -1,4 +1,4 @@
-const commandLineUsage = require("command-line-usage");
+import * as commandLineUsage from "command-line-usage";
 
 const sections = [
   {

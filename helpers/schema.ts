@@ -1,4 +1,4 @@
-const { buildSchema } = require("graphql");
+import { buildSchema } from "graphql";
 
 export let SCHEMA = buildSchema(`
     type Query {
