@@ -1,11 +1,12 @@
+import * as ffmpeg from "fluent-ffmpeg";
+import { readFileSync, writeFileSync } from "fs";
+import { dirname, format, join } from "path";
+import * as rmdir from "rimraf";
+import { writeSongMeta } from "./recording_reader";
 import { format_seconds, print } from "./shared_functions";
-import { IErrorType, IMetaDataObject, ISharedDataObject, ISongObject } from "./types";
+import { IMetaDataObject, ISharedDataObject, ISongObject } from "./types";
 
-const fs = require("fs");
-const path = require("path");
-const rmdir = require("rimraf");
 const nodeID3 = require("node-id3");
-const ffmpeg = require("fluent-ffmpeg");
 // Platform agnostic ffmpeg/ffprobe install
 const ffmpegPath: string = require("@ffmpeg-installer/ffmpeg").path;
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -13,7 +14,7 @@ const ffprobePath: string = require("@ffprobe-installer/ffprobe").path;
 ffmpeg.setFfprobePath(ffprobePath);
 
 function multi_thread(shared_data: ISharedDataObject, song_list: ISongObject[], meta_list: IMetaDataObject[]) {
-  return new Promise(async (resolve, reject) => {
+  return new Promise(async (resolve) => {
     for (let i = 0; i < song_list.length; i++) {
       const song = song_list[i];
       const meta = meta_list[i];
@@ -24,7 +25,7 @@ function multi_thread(shared_data: ISharedDataObject, song_list: ISongObject[], 
 }
 
 function cleanup_post_processing(shared_data: ISharedDataObject) {
-  rmdir(shared_data.folder, (err: IErrorType) => {
+  rmdir(shared_data.folder, (err) => {
     if (err) {
       print(err);
     }
@@ -43,7 +44,7 @@ function split_song(shared_data: ISharedDataObject, song: ISongObject, meta: IMe
       .audioBitrate(shared_data.bitrate)
       .audioChannels(2)
       .audioFrequency(shared_data.sample_rate)
-      .duration(song.duration)
+      .duration(song.duration!)
       .on("end", () => {
         // ID3 tagging
         const tags = {
@@ -58,7 +59,7 @@ function split_song(shared_data: ISharedDataObject, song: ISongObject, meta: IMe
         nodeID3.write(tags, song.filename);
         resolve();
       })
-      .on("error", (err: IErrorType) => {
+      .on("error", (err: Error) => {
         if (err) {
           throw err;
         }
@@ -68,25 +69,25 @@ function split_song(shared_data: ISharedDataObject, song: ISongObject, meta: IMe
   });
 }
 
-export function process_recording(folder: any) {
+export function process_recording(folder: string) {
   // Read from a shared folder
-  const shared_data_path = path.format({
+  const shared_data_path = format({
     dir: folder,
     base: "shared_data.json",
   });
-  const shared_data: ISharedDataObject = JSON.parse(fs.readFileSync(shared_data_path));
+  const shared_data: ISharedDataObject = JSON.parse(readFileSync(shared_data_path, "utf-8"));
 
-  const song_list_path = path.format({
+  const song_list_path = format({
     dir: folder,
     base: "song_list.json",
   });
-  const song_list: ISongObject[] = JSON.parse(fs.readFileSync(song_list_path));
+  const song_list: ISongObject[] = JSON.parse(readFileSync(song_list_path, "utf-8"));
 
-  const meta_list_path = path.format({
+  const meta_list_path = format({
     dir: folder,
     base: "meta_list.json",
   });
-  const meta_list: IMetaDataObject[] = JSON.parse(fs.readFileSync(meta_list_path));
+  const meta_list: IMetaDataObject[] = JSON.parse(readFileSync(meta_list_path, "utf-8"));
 
   // Handle older recordings
   if (!shared_data.hasOwnProperty("bitrate")) {
@@ -100,7 +101,7 @@ export function process_recording(folder: any) {
   if (Object.keys(song_list).length !== 0) {
     print(`Splitting ${shared_data.folder}`);
 
-    ffmpeg(shared_data.raw_path).ffprobe((err: IErrorType, data: any) => {
+    ffmpeg(shared_data.raw_path).ffprobe((err: Error, data: any) => {
       if (err) {
         print(`ffprobe error: ${err}`);
         return;
@@ -130,16 +131,32 @@ export function process_recording(folder: any) {
       // Multi-thread
       const promises = [];
       for (let i = 0; i < threads; i++) {
-        const sub_song = song_list.slice((song_list.length / threads) * i, (song_list.length / threads) * (i + 1));
-        const sub_meta = meta_list.slice((meta_list.length / threads) * i, (meta_list.length / threads) * (i + 1));
+        const sub_song = song_list.slice(
+          (song_list.length / threads) * i,
+          (song_list.length / threads) * (i + 1),
+        );
+        const sub_meta = meta_list.slice(
+          (meta_list.length / threads) * i,
+          (meta_list.length / threads) * (i + 1),
+        );
 
         promises.push(multi_thread(shared_data, sub_song, sub_meta));
       }
       Promise.all(promises)
         .then(() => {
           cleanup_post_processing(shared_data);
+          let last_album = "";
+          song_list.forEach((song) => {
+            if (last_album !== song.album) {
+              last_album = song.album;
+              writeSongMeta(join(
+                dirname(folder),
+                last_album,
+              ));
+            }
+          });
         })
-        .catch((error) => {
+        .catch((error: Error) => {
           print(`Caught an error when splitting: ${error}`);
         });
     });
@@ -148,21 +165,21 @@ export function process_recording(folder: any) {
 
 export function process(shared_data: ISharedDataObject, song_list: ISongObject[], meta_list: IMetaDataObject[]) {
   // Store song and meta list in case of process failure
-  const song_list_path = path.format({
+  const song_list_path = format({
     dir: shared_data.folder,
     base: "song_list.json",
   });
-  fs.writeFileSync(song_list_path, JSON.stringify(song_list));
-  const meta_list_path = path.format({
+  writeFileSync(song_list_path, JSON.stringify(song_list));
+  const meta_list_path = format({
     dir: shared_data.folder,
     base: "meta_list.json",
   });
-  fs.writeFileSync(meta_list_path, JSON.stringify(meta_list));
-  const shared_data_path = path.format({
+  writeFileSync(meta_list_path, JSON.stringify(meta_list));
+  const shared_data_path = format({
     dir: shared_data.folder,
     base: "shared_data.json",
   });
-  fs.writeFileSync(shared_data_path, JSON.stringify(shared_data));
+  writeFileSync(shared_data_path, JSON.stringify(shared_data));
 
   process_recording(shared_data.folder);
 }

@@ -54,12 +54,14 @@ interface IUpdateConfigObject {
   export_folder: string;
 }
 
-export interface IErrorType {
-  code: string;
-}
-
 export interface IPastRecording {
   folder: string;
   songs: number;
   cover: string | null;
+}
+
+export interface IRecordedSong {
+  title: string;
+  artist: string;
+  file: string;
 }

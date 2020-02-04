@@ -1,8 +1,10 @@
-import { readdirSync, readFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync, unlink, writeFileSync } from "fs";
+import { isEmpty } from "lodash";
 import { join } from "path";
-import { IPastRecording } from "./types";
+import { print } from "./shared_functions";
+import { IPastRecording, IRecordedSong } from "./types";
+
 const nodeID3 = require("node-id3");
-const _ = require("lodash");
 
 let export_folder: string;
 const maxDirsSent = 0;
@@ -27,13 +29,28 @@ export const getPastRecordings = () => {
 };
 
 export const getRecordedSongs = (data: { folder: string }) => {
-  const dirs = readdirSync(join(export_folder, data.folder), { withFileTypes: true }).filter(
+  const songs_meta_path = join(export_folder, data.folder, "songs.meta");
+  if (!existsSync(songs_meta_path)) {
+    return { songs: writeSongMeta(join(export_folder, data.folder))};
+  }
+  return { songs: JSON.parse(readFileSync(songs_meta_path, "utf-8")) };
+};
+
+export const writeSongMeta = ( folder: string ) => {
+  let songs: IRecordedSong[];
+  const songs_meta_path = join(folder, "songs.meta");
+  const dirs = readdirSync(folder, { withFileTypes: true }).filter(
     (file: any) => file.isFile() && file.name.split(" ").length > 1,
   );
   dirs.sort((a: any, b: any) => {
     return a.name.split(".")[0] - b.name.split(".")[0];
   });
-  return { songs: dirs.map((dir: any) => getSongMetadata(join(export_folder, data.folder), dir.name)) };
+  songs = dirs.map((dir: any) => getSongMetadata(folder, dir.name));
+  unlink(songs_meta_path, (err) => {
+    if (err?.code !== "ENOENT") { print(err); }
+    writeFileSync(songs_meta_path, JSON.stringify(songs), "utf-8");
+  });
+  return songs;
 };
 
 const getSongMetadata = (folder: string, file: string) => {
@@ -71,7 +88,7 @@ const getRecordingCoverPath = (folder: string) => {
         .slice(0, 1)
         .join(".") === "cover",
   );
-  if (_.isEmpty(cover)) {
+  if (isEmpty(cover)) {
     return null;
   }
   return encodeURI(join(folder, cover[0].name));

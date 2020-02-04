@@ -1,30 +1,29 @@
-#!/usr/bin/env node
-
+import * as express from "express";
+import * as express_graphql from "express-graphql";
+import { createWriteStream, mkdir, readFileSync } from "fs";
+import { createServer } from "http";
+import { clone } from "lodash";
+import { format, join, parse, resolve } from "path";
+import * as request from "request";
+import { process } from "./helpers/recording_processor";
+import { getPastRecordings, getRecordedSongs, getRecordingCover, update_reader } from "./helpers/recording_reader";
 import { SCHEMA } from "./helpers/schema";
 import { format_seconds, print, resolve_after_get } from "./helpers/shared_functions";
 import {
   IApiObject,
-  IErrorType,
   IMetaDataObject,
   IServerObject,
+  ISharedDataObject,
   ISongObject,
   IUpdateDataObject,
 } from "./helpers/types";
 
+const sane_fs = require("sanitize-filename");
+const cors = require("cors");
+
 let app: any; // express app
 let http_server: any;
 let polling_interval_id: any;
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-const sane_fs = require("sanitize-filename");
-const request = require("request");
-const _ = require("lodash");
-const express = require("express");
-const express_graphql = require("express-graphql");
-const cors = require("cors");
-const recording_reader = require("./helpers/recording_reader");
-const recording_processor = require("./helpers/recording_processor");
 let api_uri: string = "https://r-a-d.io/api";
 let server_uri: string = "https://stream.r-a-d.io/status-json.xsl";
 let stream_uri: string = "https://relay0.r-a-d.io/main.mp3";
@@ -49,7 +48,7 @@ let api: IApiObject = {
 let current_song: number = 1;
 let stream_request: any;
 let folder: string = "";
-let export_folder: string = path.join(".", "recordings_folder");
+let export_folder: string = join(".", "recordings_folder");
 let song_list: ISongObject[] = [];
 let metadata_list: IMetaDataObject[] = [];
 let rec_start: number | null;
@@ -83,9 +82,9 @@ function song_change() {
   if (rec_start) {
     start = Math.max(0, api.start_time - rec_start);
   }
-  const filename = path.format({
+  const filename = format({
     base: `${current_song}. ${sane_fs(api.np.substring(0, 20))}.mp3`,
-    dir: path.join(export_folder, output_folders[output_folders.length - 1]),
+    dir: join(export_folder, output_folders[output_folders.length - 1]),
   });
   song_list.push({
     start,
@@ -103,12 +102,12 @@ function get_dj_pic() {
   const dj_pic_url = api_uri + "/dj-image/" + api.dj_pic;
   const dot_split = api.dj_pic.split(".");
 
-  recover_path = path.format({
+  recover_path = format({
     base: `cover.${dot_split[dot_split.length - 1]}`,
-    dir: path.join(export_folder, output_folders[output_folders.length - 1]),
+    dir: join(export_folder, output_folders[output_folders.length - 1]),
   });
   request(dj_pic_url)
-    .pipe(fs.createWriteStream(recover_path))
+    .pipe(createWriteStream(recover_path))
     .on("close", () => {
       // pass
     });
@@ -119,7 +118,7 @@ function start_streaming(parent_dir: string) {
   print("Creating new fs stream");
   stream_request = request
     .get(stream_uri)
-    .on("error", (err: IErrorType) => {
+    .on("error", (err: Error) => {
       print(`Stream has encountered an error: ${err}.`);
       teardown().then(() => dj_change());
     })
@@ -128,10 +127,10 @@ function start_streaming(parent_dir: string) {
       teardown().then(() => dj_change());
     })
     .pipe(
-      fs.createWriteStream(
-        path.format({
+      createWriteStream(
+        format({
           base: "raw_recording.mp3",
-          dir: path.join(parent_dir, folder),
+          dir: join(parent_dir, folder),
         }),
         { flags: "w" },
       ),
@@ -139,29 +138,31 @@ function start_streaming(parent_dir: string) {
 }
 
 function teardown() {
-  return new Promise(() => {
+  return new Promise((res) => {
     if (stream_request != null) {
       stream_request.destroy();
       stream_request = null;
     }
     if (last_rec) {
-      const shared_data = {
+      const shared_data: ISharedDataObject = {
         bitrate: server.bitrate,
-        date: rec_start,
-        folder: path.join(export_folder, folder),
-        raw_path: path.format({
+        date: rec_start!,
+        folder: join(export_folder, folder),
+        raw_path: format({
           base: "raw_recording.mp3",
-          dir: path.join(export_folder, folder),
+          dir: join(export_folder, folder),
         }),
         sample_rate: server.sample_rate,
       };
-      recording_processor.process(shared_data, _.clone(song_list), _.clone(metadata_list));
+      process(shared_data, clone(song_list), clone(metadata_list));
       last_rec = false;
     }
     song_list = [];
     metadata_list = [];
     current_song = 1;
     rec_start = null;
+    print("Done tearing down");
+    res();
   });
 }
 
@@ -177,12 +178,12 @@ function dj_change() {
     print(api.dj_name + " has taken over.");
     if (last_rec === false) {
       folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-      fs.mkdir(path.join(export_folder, `${folder} ${api.dj_name}`), (err: IErrorType) => {
+      mkdir(join(export_folder, `${folder} ${api.dj_name}`), (err) => {
         if (err && err.code !== "EEXIST") {
           throw err;
         }
       });
-      fs.mkdir(path.join(export_folder, folder), (err: IErrorType) => {
+      mkdir(join(export_folder, folder), (err) => {
         if (err && err.code !== "EEXIST") {
           throw err;
         }
@@ -197,7 +198,7 @@ function dj_change() {
       output_folders.push(folder + " " + api.dj_name);
     } else {
       const new_folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-      fs.mkdir(path.join(export_folder, `${new_folder} ${api.dj_name}`), (err: IErrorType) => {
+      mkdir(join(export_folder, `${new_folder} ${api.dj_name}`), (err) => {
         if (err && err.code !== "EEXIST") {
           throw err;
         }
@@ -278,8 +279,8 @@ function start_server() {
     }),
   );
   app.listen(4000, () => print("Express GraphQL Server Now Running On localhost:4000/graphql"));
-  http_server = http.createServer(app);
-  app.use(express.static(path.resolve(export_folder)));
+  http_server = createServer(app);
+  app.use(express.static(resolve(export_folder)));
   http_server.listen(8080);
   print("HTTP server running on localhost:8080");
 }
@@ -336,22 +337,24 @@ const updateConfig = (data: IUpdateDataObject) => {
   excluded_djs = data.config.excluded_djs;
   let new_export_path: string;
   if (data.config.export_folder === "") {
-    new_export_path = path.format(path.parse("."));
+    new_export_path = format(parse("."));
   } else {
-    new_export_path = path.format(path.parse(data.config.export_folder));
+    new_export_path = format(parse(data.config.export_folder));
   }
   if (export_folder !== new_export_path && !force_stop) {
-    teardown();
-    fs.mkdir(new_export_path, (err: IErrorType) => {
-      if (err && err.code !== "EEXIST") {
-        throw err;
-      }
-      export_folder = new_export_path;
-      recording_reader.update_reader(export_folder);
-      app.use(express.static(path.resolve(export_folder)));
-    });
+    teardown().then(() => {
+      mkdir(new_export_path, (err) => {
+        if (err && err.code !== "EEXIST") {
+          throw err;
+        }
+        export_folder = new_export_path;
+        update_reader(export_folder);
+        app.use(express.static(resolve(export_folder)));
+      });
+    }).then(() => dj_change());
+  } else {
+    dj_change();
   }
-  dj_change();
   return "Changed";
 };
 
@@ -383,9 +386,9 @@ const root = {
   misc: getMiscData,
   config: getConfigData,
   updateConfig,
-  past_recordings: recording_reader.getPastRecordings,
-  recording_cover: recording_reader.getRecordingCover,
-  full_recording: recording_reader.getRecordedSongs,
+  past_recordings: getPastRecordings,
+  recording_cover: getRecordingCover,
+  full_recording: getRecordedSongs,
   printLog,
   streamAction,
 };
@@ -398,17 +401,17 @@ export function stop_everything() {
 
 export function initial_start(config_file: string) {
   if (config_file) {
-    const config = JSON.parse(fs.readFileSync(config_file));
+    const config = JSON.parse(readFileSync(config_file, "utf-8"));
     updateConfig(config);
   }
 
-  fs.mkdir(export_folder, (err: IErrorType) => {
+  mkdir(export_folder, (err) => {
     if (err && err.code !== "EEXIST") {
       throw err;
     }
   });
 
-  recording_reader.update_reader(export_folder);
+  update_reader(export_folder);
   start_server();
   start_polling();
 }

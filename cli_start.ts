@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
+import * as cli_args from "command-line-args";
 import { cli_opts, usage } from "./helpers/cli";
 import { process_recording } from "./helpers/recording_processor";
 import { print } from "./helpers/shared_functions";
 import { initial_start } from "./index";
-
-const cli_args = require("command-line-args");
 
 const options = cli_args(cli_opts);
 

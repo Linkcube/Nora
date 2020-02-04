@@ -1,4 +1,4 @@
-const rp = require("request-promise");
+import * as rp from "request-promise";
 
 export function resolve_after_get(x: string) {
   return rp(x).then((result: string) => {
