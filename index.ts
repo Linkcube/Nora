@@ -1,6 +1,6 @@
 import * as express from "express";
 import * as express_graphql from "express-graphql";
-import { createWriteStream, mkdir, readFileSync } from "fs";
+import { createWriteStream, existsSync, mkdir, readFileSync, writeFileSync } from "fs";
 import { createServer } from "http";
 import { clone } from "lodash";
 import { format, join, parse, resolve } from "path";
@@ -58,6 +58,22 @@ let last_rec: boolean = false;
 const output_folders: string[] = [];
 let excluded_djs: string[] = ["Hanyuu-sama"];
 const split_character: string = " - ";
+let config_file = "config.json";
+let auto_save = false;
+
+function save_config() {
+  const config = {
+    config: {
+      api_uri,
+      server_uri,
+      stream_uri,
+      poll_interval,
+      excluded_djs,
+      export_folder,
+    },
+  };
+  writeFileSync(config_file, JSON.stringify(config));
+}
 
 function gen_song_meta(filename: string) {
   let artist;
@@ -98,13 +114,13 @@ function song_change() {
   current_song += 1;
 }
 
-function get_dj_pic() {
+function get_dj_pic(dj_folder: string) {
   const dj_pic_url = api_uri + "/dj-image/" + api.dj_pic;
   const dot_split = api.dj_pic.split(".");
 
   recover_path = format({
     base: `cover.${dot_split[dot_split.length - 1]}`,
-    dir: join(export_folder, output_folders[output_folders.length - 1]),
+    dir: dj_folder,
   });
   request(dj_pic_url)
     .pipe(createWriteStream(recover_path))
@@ -113,7 +129,7 @@ function get_dj_pic() {
     });
 }
 
-function start_streaming(parent_dir: string) {
+function start_streaming(recording_dir: string) {
   print(`Starting stream recording: ${stream_uri}`);
   print("Creating new fs stream");
   stream_request = request
@@ -130,7 +146,7 @@ function start_streaming(parent_dir: string) {
       createWriteStream(
         format({
           base: "raw_recording.mp3",
-          dir: join(parent_dir, folder),
+          dir: recording_dir,
         }),
         { flags: "w" },
       ),
@@ -161,7 +177,6 @@ function teardown() {
     metadata_list = [];
     current_song = 1;
     rec_start = null;
-    print("Done tearing down");
     res();
   });
 }
@@ -178,12 +193,18 @@ function dj_change() {
     print(api.dj_name + " has taken over.");
     if (last_rec === false) {
       folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-      mkdir(join(export_folder, `${folder} ${api.dj_name}`), (err) => {
+      const output_folder = `${folder} ${api.dj_name}`;
+      const dj_folder = join(export_folder, output_folder);
+      mkdir(dj_folder, (err) => {
         if (err && err.code !== "EEXIST") {
           throw err;
         }
+        output_folders.push(output_folder);
+        song_change();
+        get_dj_pic(dj_folder);
       });
-      mkdir(join(export_folder, folder), (err) => {
+      const recording_folder = join(export_folder, folder);
+      mkdir(recording_folder, (err) => {
         if (err && err.code !== "EEXIST") {
           throw err;
         }
@@ -191,22 +212,21 @@ function dj_change() {
         print("Setting up the stream");
         rec_start = api.current_time;
         last_rec = true;
-        get_dj_pic();
-        song_change();
-        start_streaming(export_folder);
+        start_streaming(recording_folder);
       });
-      output_folders.push(folder + " " + api.dj_name);
     } else {
       const new_folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-      mkdir(join(export_folder, `${new_folder} ${api.dj_name}`), (err) => {
+      const output_folder = `${new_folder} ${api.dj_name}`;
+      const dj_folder = join(export_folder, output_folder);
+      mkdir(dj_folder, (err) => {
         if (err && err.code !== "EEXIST") {
           throw err;
         }
+        output_folders.push(output_folder);
+        song_change();
+        get_dj_pic(dj_folder);
       });
-      output_folders.push(new_folder + " " + api.dj_name);
       current_song = 1;
-      get_dj_pic();
-      song_change();
     }
   });
 }
@@ -341,7 +361,7 @@ const updateConfig = (data: IUpdateDataObject) => {
   } else {
     new_export_path = format(parse(data.config.export_folder));
   }
-  if (export_folder !== new_export_path && !force_stop) {
+  if (export_folder !== new_export_path) {
     teardown().then(() => {
       mkdir(new_export_path, (err) => {
         if (err && err.code !== "EEXIST") {
@@ -350,10 +370,18 @@ const updateConfig = (data: IUpdateDataObject) => {
         export_folder = new_export_path;
         update_reader(export_folder);
         app.use(express.static(resolve(export_folder)));
+        print(export_folder);
+        if (auto_save) {
+          save_config();
+        }
+        dj_change();
       });
-    }).then(() => dj_change());
+    });
   } else {
     dj_change();
+    if (auto_save) {
+      save_config();
+    }
   }
   return "Changed";
 };
@@ -399,11 +427,33 @@ export function stop_everything() {
   clearInterval(polling_interval_id);
 }
 
-export function initial_start(config_file: string) {
-  if (config_file) {
-    const config = JSON.parse(readFileSync(config_file, "utf-8"));
-    updateConfig(config);
+export function initial_start(options: {config: string, default: boolean, auto: boolean}) {
+  let config;
+  config_file = options.config ? options.config : "config.json";
+  if (options.config && existsSync(options.config)) {
+    config = JSON.parse(readFileSync(options.config, "utf-8")).config;
+  } else if (options.default) {
+    if (existsSync(config_file)) {
+      config = JSON.parse(readFileSync(config_file, "utf-8")).config;
+    } else {
+      save_config();
+    }
   }
+
+  if (config) {
+    api_uri = config.api_uri;
+    server_uri = config.server_uri;
+    stream_uri = config.stream_uri;
+    poll_interval = config.poll_interval;
+    excluded_djs = config.excluded_djs;
+    if (config.export_folder === "") {
+      export_folder = format(parse("."));
+    } else {
+      export_folder = format(parse(config.export_folder));
+    }
+  }
+
+  auto_save = options.auto;
 
   mkdir(export_folder, (err) => {
     if (err && err.code !== "EEXIST") {

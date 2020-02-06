@@ -11,7 +11,12 @@ const options = cli_args(cli_opts);
 if (options.process) {
   process_recording(options.process);
 } else if (options.start) {
-  initial_start(options.config);
+  const start_options = {
+    config: options.config,
+    default: options.default_config,
+    auto: options.auto_save,
+  }
+  initial_start(start_options);
 } else {
   print(usage);
 }
