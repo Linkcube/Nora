@@ -15,7 +15,7 @@ if (options.process) {
     config: options.config,
     default: options.default_config,
     auto: options.auto_save,
-  }
+  };
   initial_start(start_options);
 } else {
   print(usage);

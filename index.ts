@@ -427,7 +427,7 @@ export function stop_everything() {
   clearInterval(polling_interval_id);
 }
 
-export function initial_start(options: {config: string, default: boolean, auto: boolean}) {
+export function initial_start(options: { config: string; default: boolean; auto: boolean }) {
   let config;
   config_file = options.config ? options.config : "config.json";
   if (options.config && existsSync(options.config)) {
