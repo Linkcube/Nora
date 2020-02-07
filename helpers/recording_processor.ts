@@ -131,14 +131,8 @@ export function process_recording(folder: string) {
       // Multi-thread
       const promises = [];
       for (let i = 0; i < threads; i++) {
-        const sub_song = song_list.slice(
-          (song_list.length / threads) * i,
-          (song_list.length / threads) * (i + 1),
-        );
-        const sub_meta = meta_list.slice(
-          (meta_list.length / threads) * i,
-          (meta_list.length / threads) * (i + 1),
-        );
+        const sub_song = song_list.slice((song_list.length / threads) * i, (song_list.length / threads) * (i + 1));
+        const sub_meta = meta_list.slice((meta_list.length / threads) * i, (meta_list.length / threads) * (i + 1));
 
         promises.push(multi_thread(shared_data, sub_song, sub_meta));
       }
@@ -149,10 +143,7 @@ export function process_recording(folder: string) {
           song_list.forEach((song) => {
             if (last_album !== song.album) {
               last_album = song.album;
-              writeSongMeta(join(
-                dirname(folder),
-                last_album,
-              ));
+              writeSongMeta(join(dirname(folder), last_album));
             }
           });
         })

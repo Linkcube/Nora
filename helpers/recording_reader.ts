@@ -31,12 +31,12 @@ export const getPastRecordings = () => {
 export const getRecordedSongs = (data: { folder: string }) => {
   const songs_meta_path = join(export_folder, data.folder, "songs.meta");
   if (!existsSync(songs_meta_path)) {
-    return { songs: writeSongMeta(join(export_folder, data.folder))};
+    return { songs: writeSongMeta(join(export_folder, data.folder)) };
   }
   return { songs: JSON.parse(readFileSync(songs_meta_path, "utf-8")) };
 };
 
-export const writeSongMeta = ( folder: string ) => {
+export const writeSongMeta = (folder: string) => {
   let songs: IRecordedSong[];
   const songs_meta_path = join(folder, "songs.meta");
   const dirs = readdirSync(folder, { withFileTypes: true }).filter(
@@ -47,7 +47,9 @@ export const writeSongMeta = ( folder: string ) => {
   });
   songs = dirs.map((dir: any) => getSongMetadata(folder, dir.name));
   unlink(songs_meta_path, (err) => {
-    if (err?.code !== "ENOENT") { print(err); }
+    if (err?.code !== "ENOENT") {
+      print(err);
+    }
     writeFileSync(songs_meta_path, JSON.stringify(songs), "utf-8");
   });
   return songs;

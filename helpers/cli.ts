@@ -16,6 +16,18 @@ const sections = [
         description: "Loads a JSON config file for the main program, use with --start.",
       },
       {
+        name: "default_config",
+        alias: "d",
+        type: Boolean,
+        description: "If no config file is provided/found, generate a config file using default values.",
+      },
+      {
+        name: "auto_save",
+        alias: "a",
+        type: Boolean,
+        description: "Save changes made in the gui to the config file.",
+      },
+      {
         name: "start",
         alias: "s",
         type: Boolean,
@@ -38,6 +50,8 @@ export const usage = commandLineUsage(sections);
 
 export const cli_opts = [
   { name: "config", alias: "c", type: String },
+  { name: "default_config", alias: "d", type: Boolean },
+  { name: "auto_save", alias: "a", type: Boolean },
   { name: "start", alias: "s", type: Boolean },
   { name: "process", alias: "p", type: String },
   { name: "help", alias: "h", type: Boolean },
