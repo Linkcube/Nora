@@ -1,6 +1,6 @@
 {
   "name": "linkcube-nora",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "Nodejs R/a/dio Archiver",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

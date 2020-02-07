@@ -370,7 +370,6 @@ const updateConfig = (data: IUpdateDataObject) => {
         export_folder = new_export_path;
         update_reader(export_folder);
         app.use(express.static(resolve(export_folder)));
-        print(export_folder);
         if (auto_save) {
           save_config();
         }
@@ -378,10 +377,10 @@ const updateConfig = (data: IUpdateDataObject) => {
       });
     });
   } else {
-    dj_change();
     if (auto_save) {
       save_config();
     }
+    dj_change();
   }
   return "Changed";
 };
