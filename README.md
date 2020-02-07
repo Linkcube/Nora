@@ -21,6 +21,8 @@ Export Folder | String | `export_folder = "."`
 Usage (shorthand) | Description | Example
 --- | --- | ---
 --config (-c) | Load a config file | `-c radio.json`
+--default_config (-d) | If no config file is provided/found, generate a config file using default values | `-d`
+--auto_save (-a) | Save changes made in the gui to the config file | `-a`
 --process (-p) | Process a previous recording | `-p my_recording`
 --start (-s) | Start the main program | `-s`
 
