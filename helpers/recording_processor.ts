@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { dirname, format, join } from "path";
 import * as rmdir from "rimraf";
 import { writeSongMeta } from "./recording_reader";
-import { format_seconds, print } from "./shared_functions";
+import { format_seconds, log_error, print } from "./shared_functions";
 import { IMetaDataObject, ISharedDataObject, ISongObject } from "./types";
 
 const nodeID3 = require("node-id3");
@@ -61,6 +61,7 @@ function split_song(shared_data: ISharedDataObject, song: ISongObject, meta: IMe
       })
       .on("error", (err: Error) => {
         if (err) {
+          log_error(err);
           throw err;
         }
         reject();
