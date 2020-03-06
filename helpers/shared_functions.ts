@@ -11,9 +11,11 @@ const noraLogger = winston.createLogger({
 });
 
 export function resolve_after_get(x: string) {
-  return rp(x).then((result: string) => {
-    return JSON.parse(result);
-  }).catch((err: Error) => log_error(err));
+  return rp(x)
+    .then((result: string) => {
+      return JSON.parse(result);
+    })
+    .catch((err: Error) => log_error(err));
 }
 
 export function format_seconds(seconds: number) {
