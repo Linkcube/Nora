@@ -8,7 +8,7 @@ import * as request from "request";
 import { process } from "./helpers/recording_processor";
 import { getPastRecordings, getRecordedSongs, getRecordingCover, update_reader } from "./helpers/recording_reader";
 import { SCHEMA } from "./helpers/schema";
-import { format_seconds, print, resolve_after_get } from "./helpers/shared_functions";
+import { format_seconds, log_error, print, resolve_after_get } from "./helpers/shared_functions";
 import {
   IApiObject,
   IMetaDataObject,
@@ -111,6 +111,7 @@ function song_change() {
   });
   metadata_list.push(gen_song_meta(filename));
   print(current_song + ". " + sane_fs(api.np) + " ::" + format_seconds(start) + "::");
+  print(`Current song a song_change: ${current_song}`);
   current_song += 1;
 }
 
@@ -149,7 +150,7 @@ function start_streaming(recording_dir: string) {
           dir: recording_dir,
         }),
         { flags: "w" },
-      ),
+      ).on("error", (err: Error) => log_error(err)),
     );
 }
 
@@ -197,6 +198,7 @@ function dj_change() {
       const dj_folder = join(export_folder, output_folder);
       mkdir(dj_folder, (err) => {
         if (err && err.code !== "EEXIST") {
+          log_error(err);
           throw err;
         }
         output_folders.push(output_folder);
@@ -206,8 +208,10 @@ function dj_change() {
       const recording_folder = join(export_folder, folder);
       mkdir(recording_folder, (err) => {
         if (err && err.code !== "EEXIST") {
+          log_error(err);
           throw err;
         }
+        print(`Current song at dj change: ${current_song}`);
         current_song = 1;
         print("Setting up the stream");
         rec_start = api.current_time;
@@ -220,6 +224,7 @@ function dj_change() {
       const dj_folder = join(export_folder, output_folder);
       mkdir(dj_folder, (err) => {
         if (err && err.code !== "EEXIST") {
+          log_error(err);
           throw err;
         }
         output_folders.push(output_folder);
@@ -365,6 +370,7 @@ const updateConfig = (data: IUpdateDataObject) => {
     teardown().then(() => {
       mkdir(new_export_path, (err) => {
         if (err && err.code !== "EEXIST") {
+          log_error(err);
           throw err;
         }
         export_folder = new_export_path;
@@ -456,6 +462,7 @@ export function initial_start(options: { config: string; default: boolean; auto:
 
   mkdir(export_folder, (err) => {
     if (err && err.code !== "EEXIST") {
+      log_error(err);
       throw err;
     }
   });

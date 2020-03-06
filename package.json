@@ -1,6 +1,6 @@
 {
   "name": "linkcube-nora",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Nodejs R/a/dio Archiver",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -41,7 +41,8 @@
     "request": "^2.88.0",
     "request-promise": "^4.2.4",
     "rimraf": "^3.0.0",
-    "sanitize-filename": "^1.6.3"
+    "sanitize-filename": "^1.6.3",
+    "winston": "^3.2.1"
   },
   "devDependencies": {
     "@types/command-line-args": "^5.0.0",

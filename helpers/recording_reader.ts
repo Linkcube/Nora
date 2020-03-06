@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, unlink, writeFileSync } from "fs";
+import { Dirent, existsSync, readdirSync, readFileSync, unlink, writeFileSync } from "fs";
 import { isEmpty } from "lodash";
 import { join } from "path";
 import { print } from "./shared_functions";
@@ -14,15 +14,15 @@ export function update_reader(new_export_folder: string) {
 }
 
 export const getPastRecordings = () => {
-  let dirs = readdirSync(export_folder, { withFileTypes: true })
-    .filter((file: any) => file.isDirectory() && file.name.split(" ").length === 2)
-    .map((dir: any) => dir.name);
+  let dirs: string[] = readdirSync(export_folder, { withFileTypes: true })
+    .filter((file: Dirent) => file.isDirectory() && file.name.split(" ").length > 1)
+    .map((dir: Dirent) => dir.name);
   const result: IPastRecording[] = [];
   dirs.reverse();
   if (maxDirsSent > 0) {
     dirs = dirs.slice(0, maxDirsSent);
   }
-  dirs.forEach((dir: any) => {
+  dirs.forEach((dir: string) => {
     result.push({ folder: dir, songs: getSongCount(dir), cover: getRecordingCoverPath(dir) });
   });
   return { recordings: result };
@@ -39,13 +39,13 @@ export const getRecordedSongs = (data: { folder: string }) => {
 export const writeSongMeta = (folder: string) => {
   let songs: IRecordedSong[];
   const songs_meta_path = join(folder, "songs.meta");
-  const dirs = readdirSync(folder, { withFileTypes: true }).filter(
-    (file: any) => file.isFile() && file.name.split(" ").length > 1,
+  const dirs: Dirent[] = readdirSync(folder, { withFileTypes: true }).filter(
+    (file: Dirent) => file.isFile() && file.name.split(" ").length > 1,
   );
-  dirs.sort((a: any, b: any) => {
-    return a.name.split(".")[0] - b.name.split(".")[0];
+  dirs.sort((a: Dirent, b: Dirent) => {
+    return Number(a.name.split(".")[0]) - Number(b.name.split(".")[0]);
   });
-  songs = dirs.map((dir: any) => getSongMetadata(folder, dir.name));
+  songs = dirs.map((dir: Dirent) => getSongMetadata(folder, dir.name));
   unlink(songs_meta_path, (err) => {
     if (err?.code !== "ENOENT") {
       print(err);
@@ -83,7 +83,7 @@ export const getRecordingCover = (data: { folder: string }) => {
 
 const getRecordingCoverPath = (folder: string) => {
   const cover = readdirSync(join(export_folder, folder), { withFileTypes: true }).filter(
-    (file: any) =>
+    (file: Dirent) =>
       file.isFile() &&
       file.name
         .split(".")
