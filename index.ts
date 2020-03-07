@@ -111,7 +111,6 @@ function song_change() {
   });
   metadata_list.push(gen_song_meta(filename));
   print(current_song + ". " + sane_fs(api.np) + " ::" + format_seconds(start) + "::");
-  print(`Current song a song_change: ${current_song}`);
   current_song += 1;
 }
 
@@ -211,7 +210,6 @@ function dj_change() {
           log_error(err);
           throw err;
         }
-        print(`Current song at dj change: ${current_song}`);
         current_song = 1;
         print("Setting up the stream");
         rec_start = api.current_time;
