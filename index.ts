@@ -135,7 +135,7 @@ function start_streaming(recording_dir: string) {
   stream_request = request
     .get(stream_uri)
     .on("error", (err: Error) => {
-      print(`Stream has encountered an error: ${err}.`);
+      log_error(err);
       teardown().then(() => dj_change());
     })
     .on("complete", () => {
@@ -191,46 +191,32 @@ function dj_change() {
   }
   return new Promise(() => {
     print(api.dj_name + " has taken over.");
+    folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
     if (last_rec === false) {
-      folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-      const output_folder = `${folder} ${api.dj_name}`;
-      const dj_folder = join(export_folder, output_folder);
-      mkdir(dj_folder, (err) => {
-        if (err && err.code !== "EEXIST") {
-          log_error(err);
-          throw err;
-        }
-        output_folders.push(output_folder);
-        song_change();
-        get_dj_pic(dj_folder);
-      });
       const recording_folder = join(export_folder, folder);
       mkdir(recording_folder, (err) => {
         if (err && err.code !== "EEXIST") {
           log_error(err);
           throw err;
         }
-        current_song = 1;
         print("Setting up the stream");
         rec_start = api.current_time;
         last_rec = true;
         start_streaming(recording_folder);
       });
-    } else {
-      const new_folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-      const output_folder = `${new_folder} ${api.dj_name}`;
-      const dj_folder = join(export_folder, output_folder);
-      mkdir(dj_folder, (err) => {
-        if (err && err.code !== "EEXIST") {
-          log_error(err);
-          throw err;
-        }
-        output_folders.push(output_folder);
-        song_change();
-        get_dj_pic(dj_folder);
-      });
-      current_song = 1;
     }
+    const output_folder = `${folder} ${api.dj_name}`;
+    const dj_folder = join(export_folder, output_folder);
+    mkdir(dj_folder, (err) => {
+      if (err && err.code !== "EEXIST") {
+        log_error(err);
+        throw err;
+      }
+      output_folders.push(output_folder);
+      song_change();
+      get_dj_pic(dj_folder);
+    });
+    current_song = 1;
   });
 }
 
