@@ -1,5 +1,5 @@
 import * as ffmpeg from "fluent-ffmpeg";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFile } from "fs";
 import { dirname, format, join } from "path";
 import * as rmdir from "rimraf";
 import { writeSongMeta } from "./recording_reader";
@@ -161,17 +161,20 @@ export function process(shared_data: ISharedDataObject, song_list: ISongObject[]
     dir: shared_data.folder,
     base: "song_list.json",
   });
-  writeFileSync(song_list_path, JSON.stringify(song_list));
   const meta_list_path = format({
     dir: shared_data.folder,
     base: "meta_list.json",
   });
-  writeFileSync(meta_list_path, JSON.stringify(meta_list));
   const shared_data_path = format({
     dir: shared_data.folder,
     base: "shared_data.json",
   });
-  writeFileSync(shared_data_path, JSON.stringify(shared_data));
 
-  process_recording(shared_data.folder);
+  writeFile(song_list_path, JSON.stringify(song_list), "utf8", () => {
+    writeFile(meta_list_path, JSON.stringify(meta_list), "utf8", () => {
+      writeFile(shared_data_path, JSON.stringify(shared_data), "utf8", () => {
+        process_recording(shared_data.folder);
+      });
+    });
+  });
 }
