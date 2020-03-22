@@ -46,7 +46,7 @@ export const writeSongMeta = (folder: string) => {
     return Number(a.name.split(".")[0]) - Number(b.name.split(".")[0]);
   });
   songs = dirs.map((dir: Dirent) => getSongMetadata(folder, dir.name));
-  unlink(songs_meta_path, (err) => {
+  unlink(songs_meta_path, err => {
     if (err?.code !== "ENOENT") {
       print(err);
     }

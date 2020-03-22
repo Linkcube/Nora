@@ -14,7 +14,7 @@ const ffprobePath: string = require("@ffprobe-installer/ffprobe").path;
 ffmpeg.setFfprobePath(ffprobePath);
 
 function multi_thread(shared_data: ISharedDataObject, song_list: ISongObject[], meta_list: IMetaDataObject[]) {
-  return new Promise(async (resolve) => {
+  return new Promise(async resolve => {
     for (let i = 0; i < song_list.length; i++) {
       const song = song_list[i];
       const meta = meta_list[i];
@@ -25,7 +25,7 @@ function multi_thread(shared_data: ISharedDataObject, song_list: ISongObject[], 
 }
 
 function cleanup_post_processing(shared_data: ISharedDataObject) {
-  rmdir(shared_data.folder, (err) => {
+  rmdir(shared_data.folder, err => {
     if (err) {
       print(err);
     }
@@ -70,26 +70,11 @@ function split_song(shared_data: ISharedDataObject, song: ISongObject, meta: IMe
   });
 }
 
-export function process_recording(folder: string) {
-  // Read from a shared folder
-  const shared_data_path = format({
-    dir: folder,
-    base: "shared_data.json",
-  });
-  const shared_data: ISharedDataObject = JSON.parse(readFileSync(shared_data_path, "utf-8"));
-
-  const song_list_path = format({
-    dir: folder,
-    base: "song_list.json",
-  });
-  const song_list: ISongObject[] = JSON.parse(readFileSync(song_list_path, "utf-8"));
-
-  const meta_list_path = format({
-    dir: folder,
-    base: "meta_list.json",
-  });
-  const meta_list: IMetaDataObject[] = JSON.parse(readFileSync(meta_list_path, "utf-8"));
-
+export function process_recording(
+  song_list: ISongObject[],
+  meta_list: IMetaDataObject[],
+  shared_data: ISharedDataObject,
+) {
   // Handle older recordings
   if (!shared_data.hasOwnProperty("bitrate")) {
     shared_data.bitrate = 192;
@@ -109,7 +94,7 @@ export function process_recording(folder: string) {
       }
       // Calculate duration of each song
       let song_count = 0;
-      song_list.forEach((song) => {
+      song_list.forEach(song => {
         let duration;
         if (song_count === song_list.length - 1) {
           duration = data.format.duration;
@@ -141,10 +126,10 @@ export function process_recording(folder: string) {
         .then(() => {
           cleanup_post_processing(shared_data);
           let last_album = "";
-          song_list.forEach((song) => {
+          song_list.forEach(song => {
             if (last_album !== song.album) {
               last_album = song.album;
-              writeSongMeta(join(dirname(folder), last_album));
+              writeSongMeta(join(dirname(shared_data.folder), last_album));
             }
           });
         })
@@ -153,6 +138,28 @@ export function process_recording(folder: string) {
         });
     });
   }
+}
+
+export function load_recording_config(folder: string) {
+  const shared_data_path = format({
+    dir: folder,
+    base: "shared_data.json",
+  });
+  const shared_data: ISharedDataObject = JSON.parse(readFileSync(shared_data_path, "utf-8"));
+
+  const song_list_path = format({
+    dir: folder,
+    base: "song_list.json",
+  });
+  const song_list: ISongObject[] = JSON.parse(readFileSync(song_list_path, "utf-8"));
+
+  const meta_list_path = format({
+    dir: folder,
+    base: "meta_list.json",
+  });
+  const meta_list: IMetaDataObject[] = JSON.parse(readFileSync(meta_list_path, "utf-8"));
+
+  process_recording(song_list, meta_list, shared_data);
 }
 
 export function process(shared_data: ISharedDataObject, song_list: ISongObject[], meta_list: IMetaDataObject[]) {
@@ -173,7 +180,7 @@ export function process(shared_data: ISharedDataObject, song_list: ISongObject[]
   writeFile(song_list_path, JSON.stringify(song_list), "utf8", () => {
     writeFile(meta_list_path, JSON.stringify(meta_list), "utf8", () => {
       writeFile(shared_data_path, JSON.stringify(shared_data), "utf8", () => {
-        process_recording(shared_data.folder);
+        process_recording(song_list, meta_list, shared_data);
       });
     });
   });

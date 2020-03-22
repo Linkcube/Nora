@@ -154,7 +154,7 @@ function start_streaming(recording_dir: string) {
 }
 
 function teardown() {
-  return new Promise((res) => {
+  return new Promise(res => {
     if (stream_request != null) {
       stream_request.destroy();
       stream_request = null;
@@ -194,7 +194,7 @@ function dj_change() {
     folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
     if (last_rec === false) {
       const recording_folder = join(export_folder, folder);
-      mkdir(recording_folder, (err) => {
+      mkdir(recording_folder, err => {
         if (err && err.code !== "EEXIST") {
           log_error(err);
           throw err;
@@ -207,7 +207,7 @@ function dj_change() {
     }
     const output_folder = `${folder} ${api.dj_name}`;
     const dj_folder = join(export_folder, output_folder);
-    mkdir(dj_folder, (err) => {
+    mkdir(dj_folder, err => {
       if (err && err.code !== "EEXIST") {
         log_error(err);
         throw err;
@@ -352,7 +352,7 @@ const updateConfig = (data: IUpdateDataObject) => {
   }
   if (export_folder !== new_export_path) {
     teardown().then(() => {
-      mkdir(new_export_path, (err) => {
+      mkdir(new_export_path, err => {
         if (err && err.code !== "EEXIST") {
           log_error(err);
           throw err;
@@ -417,6 +417,7 @@ export function stop_everything() {
 }
 
 export function initial_start(options: { config: string; default: boolean; auto: boolean }) {
+  print("Starting Nora v1.1.5");
   let config;
   config_file = options.config ? options.config : "config.json";
   if (options.config && existsSync(options.config)) {
@@ -444,7 +445,7 @@ export function initial_start(options: { config: string; default: boolean; auto:
 
   auto_save = options.auto;
 
-  mkdir(export_folder, (err) => {
+  mkdir(export_folder, err => {
     if (err && err.code !== "EEXIST") {
       log_error(err);
       throw err;
