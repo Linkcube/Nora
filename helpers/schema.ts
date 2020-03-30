@@ -15,6 +15,7 @@ export let SCHEMA = buildSchema(`
         updateConfig(config: new_config): String
         printLog(msg: String): String
         streamAction(action: String): String
+        dj_change(nothing: String): Boolean
     }
     type api_obj {
         np: String

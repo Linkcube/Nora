@@ -14,7 +14,7 @@ const ffprobePath: string = require("@ffprobe-installer/ffprobe").path;
 ffmpeg.setFfprobePath(ffprobePath);
 
 function multi_thread(shared_data: ISharedDataObject, song_list: ISongObject[], meta_list: IMetaDataObject[]) {
-  return new Promise(async resolve => {
+  return new Promise(async (resolve) => {
     for (let i = 0; i < song_list.length; i++) {
       const song = song_list[i];
       const meta = meta_list[i];
@@ -25,9 +25,9 @@ function multi_thread(shared_data: ISharedDataObject, song_list: ISongObject[], 
 }
 
 function cleanup_post_processing(shared_data: ISharedDataObject) {
-  rmdir(shared_data.folder, err => {
+  rmdir(shared_data.folder, (err) => {
     if (err) {
-      print(err);
+      log_error(err);
     }
   });
   print("Finished splitting");
@@ -89,12 +89,12 @@ export function process_recording(
 
     ffmpeg(shared_data.raw_path).ffprobe((err: Error, data: any) => {
       if (err) {
-        print(`ffprobe error: ${err}`);
-        return;
+        log_error(err);
+        throw err;
       }
       // Calculate duration of each song
       let song_count = 0;
-      song_list.forEach(song => {
+      song_list.forEach((song) => {
         let duration;
         if (song_count === song_list.length - 1) {
           duration = data.format.duration;
@@ -126,7 +126,7 @@ export function process_recording(
         .then(() => {
           cleanup_post_processing(shared_data);
           let last_album = "";
-          song_list.forEach(song => {
+          song_list.forEach((song) => {
             if (last_album !== song.album) {
               last_album = song.album;
               writeSongMeta(join(dirname(shared_data.folder), last_album));
@@ -134,7 +134,7 @@ export function process_recording(
           });
         })
         .catch((error: Error) => {
-          print(`Caught an error when splitting: ${error}`);
+          log_error(error);
         });
     });
   }
