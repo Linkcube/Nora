@@ -101,12 +101,11 @@ function song_change() {
   metadata_list.push(gen_song_meta(filename));
   let start = 0;
   if (rec_start) {
+    start = api.start_time - rec_start;
     if (song_list.length > 0) {
       // For Hijacks where DJs share the same "Hijack #" name
       const last_two_meta = takeRight(metadata_list, 2);
       const last_song = takeRight(song_list)[0];
-      print(`${last_song.dj} - ${api.dj_name}`);
-      print(`${api.current_time} - ${last_song.start}`);
       if (
         last_song.dj !== api.dj_name &&
         last_two_meta[0].song_name === last_two_meta[1].song_name &&
@@ -114,8 +113,6 @@ function song_change() {
       ) {
         start = api.current_time - (rec_start + last_song.start);
       }
-    } else {
-      start = api.start_time - rec_start;
     }
     start = Math.max(0, start);
   }
