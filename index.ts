@@ -2,7 +2,7 @@ import * as express from "express";
 import * as express_graphql from "express-graphql";
 import { createWriteStream, existsSync, mkdir, readFileSync, writeFileSync } from "fs";
 import { createServer } from "http";
-import { clone } from "lodash";
+import { clone, takeRight } from "lodash";
 import { format, join, parse, resolve } from "path";
 import * as request from "request";
 import { process } from "./helpers/recording_processor";
@@ -47,7 +47,7 @@ let api: IApiObject = {
 };
 let current_song: number = 1;
 let stream_request: any;
-let folder: string = "";
+let raw_data_folder: string = "";
 let export_folder: string = join(".", "recordings_folder");
 let song_list: ISongObject[] = [];
 let metadata_list: IMetaDataObject[] = [];
@@ -94,14 +94,31 @@ function gen_song_meta(filename: string) {
 }
 
 function song_change() {
-  let start = 0;
-  if (rec_start) {
-    start = Math.max(0, api.start_time - rec_start);
-  }
   const filename = format({
     base: `${current_song}. ${sane_fs(api.np.substring(0, 20))}.mp3`,
     dir: join(export_folder, output_folders[output_folders.length - 1]),
   });
+  metadata_list.push(gen_song_meta(filename));
+  let start = 0;
+  if (rec_start) {
+    if (song_list.length > 0) {
+      // For Hijacks where DJs share the same "Hijack #" name
+      const last_two_meta = takeRight(metadata_list, 2);
+      const last_song = takeRight(song_list)[0];
+      print(`${last_song.dj} - ${api.dj_name}`);
+      print(`${api.current_time} - ${last_song.start}`);
+      if (
+        last_song.dj !== api.dj_name &&
+        last_two_meta[0].song_name === last_two_meta[1].song_name &&
+        last_song.dj === last_two_meta[1].artist
+      ) {
+        start = api.current_time - (rec_start + last_song.start);
+      }
+    } else {
+      start = api.start_time - rec_start;
+    }
+    start = Math.max(0, start);
+  }
   song_list.push({
     start,
     filename,
@@ -109,7 +126,6 @@ function song_change() {
     cover: recover_path,
     album: output_folders[output_folders.length - 1],
   });
-  metadata_list.push(gen_song_meta(filename));
   print(current_song + ". " + sane_fs(api.np) + " ::" + format_seconds(start) + "::");
   current_song += 1;
 }
@@ -131,7 +147,7 @@ function get_dj_pic(dj_folder: string) {
 
 function start_streaming(recording_dir: string) {
   print(`Starting stream recording: ${stream_uri}`);
-  print("Creating new fs stream");
+  print(`Creating new fs stream: ${recording_dir}`);
   stream_request = request
     .get(stream_uri)
     .on("error", (err: Error) => {
@@ -154,7 +170,7 @@ function start_streaming(recording_dir: string) {
 }
 
 function teardown() {
-  return new Promise(res => {
+  return new Promise((res) => {
     if (stream_request != null) {
       stream_request.destroy();
       stream_request = null;
@@ -163,10 +179,10 @@ function teardown() {
       const shared_data: ISharedDataObject = {
         bitrate: server.bitrate,
         date: rec_start!,
-        folder: join(export_folder, folder),
+        folder: raw_data_folder,
         raw_path: format({
           base: "raw_recording.mp3",
-          dir: join(export_folder, folder),
+          dir: raw_data_folder,
         }),
         sample_rate: server.sample_rate,
       };
@@ -191,10 +207,10 @@ function dj_change() {
   }
   return new Promise(() => {
     print(api.dj_name + " has taken over.");
-    folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
+    const folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
     if (last_rec === false) {
-      const recording_folder = join(export_folder, folder);
-      mkdir(recording_folder, err => {
+      raw_data_folder = join(export_folder, folder);
+      mkdir(raw_data_folder, (err) => {
         if (err && err.code !== "EEXIST") {
           log_error(err);
           throw err;
@@ -202,12 +218,12 @@ function dj_change() {
         print("Setting up the stream");
         rec_start = api.current_time;
         last_rec = true;
-        start_streaming(recording_folder);
+        start_streaming(raw_data_folder);
       });
     }
     const output_folder = `${folder} ${api.dj_name}`;
     const dj_folder = join(export_folder, output_folder);
-    mkdir(dj_folder, err => {
+    mkdir(dj_folder, (err) => {
       if (err && err.code !== "EEXIST") {
         log_error(err);
         throw err;
@@ -352,7 +368,7 @@ const updateConfig = (data: IUpdateDataObject) => {
   }
   if (export_folder !== new_export_path) {
     teardown().then(() => {
-      mkdir(new_export_path, err => {
+      mkdir(new_export_path, (err) => {
         if (err && err.code !== "EEXIST") {
           log_error(err);
           throw err;
@@ -408,6 +424,7 @@ const root = {
   full_recording: getRecordedSongs,
   printLog,
   streamAction,
+  dj_change,
 };
 
 export function stop_everything() {
@@ -445,7 +462,7 @@ export function initial_start(options: { config: string; default: boolean; auto:
 
   auto_save = options.auto;
 
-  mkdir(export_folder, err => {
+  mkdir(export_folder, (err) => {
     if (err && err.code !== "EEXIST") {
       log_error(err);
       throw err;
