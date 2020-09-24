@@ -62,7 +62,6 @@ function split_song(shared_data: ISharedDataObject, song: ISongObject, meta: IMe
       .on("error", (err: Error) => {
         if (err) {
           log_error(err);
-          throw err;
         }
         reject();
       })
@@ -90,7 +89,7 @@ export function process_recording(
     ffmpeg(shared_data.raw_path).ffprobe((err: Error, data: any) => {
       if (err) {
         log_error(err);
-        throw err;
+        return;
       }
       // Calculate duration of each song
       let song_count = 0;
