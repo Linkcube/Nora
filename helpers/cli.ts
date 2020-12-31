@@ -42,7 +42,7 @@ const sections = [
       {
         name: "cue_sheets",
         alias: "k",
-        typeLabel: Boolean,
+        type: Boolean,
         description: "Split a recording into compliant cue sheets instead of mp3 files.",
       },
     ],
