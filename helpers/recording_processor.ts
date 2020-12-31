@@ -1,10 +1,12 @@
 import * as ffmpeg from "fluent-ffmpeg";
-import { readFileSync, writeFile } from "fs";
-import { dirname, format, join } from "path";
-import * as rmdir from "rimraf";
+import { createReadStream, Dirent, existsSync, readdirSync, unlinkSync } from "fs";
+import { isEmpty } from "lodash";
+import { dirname, join, resolve } from "path";
+import * as readline from "readline";
+import { CueSheet } from "./cue_sheet";
 import { writeSongMeta } from "./recording_reader";
 import { format_seconds, log_error, print } from "./shared_functions";
-import { IMetaDataObject, ISharedDataObject, ISongObject } from "./types";
+const sane_fs = require("sanitize-filename");
 
 const nodeID3 = require("node-id3");
 // Platform agnostic ffmpeg/ffprobe install
@@ -13,51 +15,51 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const ffprobePath: string = require("@ffprobe-installer/ffprobe").path;
 ffmpeg.setFfprobePath(ffprobePath);
 
-function multi_thread(shared_data: ISharedDataObject, song_list: ISongObject[], meta_list: IMetaDataObject[]) {
-  return new Promise(async (resolve) => {
-    for (let i = 0; i < song_list.length; i++) {
-      const song = song_list[i];
-      const meta = meta_list[i];
-      await split_song(shared_data, song, meta);
+function multi_thread(cue: CueParser, indexes: number[]) {
+  return new Promise<void>(async (res) => {
+    for (const index of indexes) {
+      await split_song(cue, index);
     }
-    resolve();
+    res();
   });
 }
 
-function cleanup_post_processing(shared_data: ISharedDataObject) {
-  rmdir(shared_data.folder, (err) => {
-    if (err) {
-      log_error(err);
-    }
-  });
+function cleanup_post_processing(cue: CueParser) {
+  try {
+    unlinkSync(cue.recording);
+    unlinkSync(cue.cueFile);
+  } catch (err) {
+    log_error(err);
+  }
+
   print("Finished splitting");
 }
 
-function split_song(shared_data: ISharedDataObject, song: ISongObject, meta: IMetaDataObject) {
-  if (song.duration === 0) {
+function split_song(cue: CueParser, trackIndex: number) {
+  if (cue.getSongDuration(trackIndex) === 0) {
     return null;
   }
-  return new Promise((resolve, reject) => {
-    ffmpeg(shared_data.raw_path)
-      .output(song.filename)
-      .seek(format_seconds(song.start))
-      .audioBitrate(shared_data.bitrate)
+  return new Promise<void>((res, reject) => {
+    ffmpeg(cue.recording)
+      .output(cue.makeSongFile(trackIndex))
+      .seek(cue.formatTrackIndex(trackIndex))
+      .audioBitrate(192)
       .audioChannels(2)
-      .audioFrequency(shared_data.sample_rate)
-      .duration(song.duration!)
+      .audioFrequency(44100)
+      .duration(cue.getSongDuration(trackIndex))
       .on("end", () => {
         // ID3 tagging
         const tags = {
-          title: meta.song_name,
-          artist: meta.artist,
-          album: song.album,
-          APIC: song.cover,
-          trackNumber: meta.track,
-          date: shared_data.date,
-          performerInfo: song.dj,
+          title: cue.tracks[trackIndex].title,
+          artist: cue.tracks[trackIndex].performer || cue.albumArtist,
+          album: cue.albumTitle,
+          APIC: cue.cover,
+          trackNumber: cue.tracks[trackIndex].track,
+          date: cue.albumTitle,
+          performerInfo: cue.albumArtist,
         };
-        nodeID3.write(tags, song.filename);
-        resolve();
+        nodeID3.write(tags, cue.makeSongFile(trackIndex));
+        res();
       })
       .on("error", (err: Error) => {
         if (err) {
@@ -69,68 +71,83 @@ function split_song(shared_data: ISharedDataObject, song: ISongObject, meta: IMe
   });
 }
 
-export function process_recording(
-  song_list: ISongObject[],
-  meta_list: IMetaDataObject[],
-  shared_data: ISharedDataObject,
-) {
-  // Handle older recordings
-  if (!shared_data.hasOwnProperty("bitrate")) {
-    shared_data.bitrate = 192;
-  }
-  if (!shared_data.hasOwnProperty("sample_rate")) {
-    shared_data.sample_rate = 44100;
-  }
+function single_thread(cue: CueParser) {
+  return new Promise<void>(async (res, reject) => {
+    print("Starting single thread");
+    const reader = ffmpeg(cue.recording)
+      .audioBitrate(192)
+      .audioChannels(2)
+      .audioFrequency(44100)
+      .seekInput(0)
+      .on("error", (err: Error) => {
+        if (err) {
+          log_error(err);
+        }
+        reject();
+      });
+    let i = 0;
+    for await (const track of cue.tracks) {
+      reader.output(cue.makeSongFile(i));
+      if (i < cue.tracks.length - 1) {
+        reader.seek(cue.getSongDuration(i));
+      }
+      i += 1;
+    }
+    reader
+      .on("end", async () => {
+        print("Tagging");
+        // ID3 tagging
+        let n = 0;
+        for await (const track of cue.tracks) {
+          const tags = {
+            title: cue.tracks[n].title,
+            artist: cue.tracks[n].performer || cue.albumArtist,
+            album: cue.albumTitle,
+            APIC: cue.cover,
+            trackNumber: cue.tracks[n].track,
+            date: cue.albumTitle,
+            performerInfo: cue.albumArtist,
+          };
+          nodeID3.write(tags, cue.makeSongFile(n));
+          n += 1;
+        }
+        res();
+      })
+      .run();
+  });
+}
 
+export function process_recording(cue: CueParser) {
   // Actual splitting
-  if (Object.keys(song_list).length !== 0) {
-    print(`Splitting ${shared_data.folder}`);
+  if (cue.tracks.length !== 0) {
+    print(`Splitting ${cue.directory}`);
 
-    ffmpeg(shared_data.raw_path).ffprobe((err: Error, data: any) => {
+    ffmpeg(cue.recording).ffprobe((err: Error, data: any) => {
       if (err) {
         log_error(err);
         return;
       }
-      // Calculate duration of each song
-      let song_count = 0;
-      song_list.forEach((song) => {
-        let duration;
-        if (song_count === song_list.length - 1) {
-          duration = data.format.duration;
-        } else if (song.start > data.format.duration) {
-          print(`Error: song starts after end of stream ${song.filename}`);
-          duration = 0;
-          song.start = 0;
-        } else {
-          duration = song_list[song_count + 1].start - song.start;
-        }
-        song.duration = duration;
-        song_count++;
-      });
+
       // Split the file
-      let threads = 2;
+      let threads = 3;
       if (threads < 1) {
         // Kill the CPU
-        threads = song_list.length;
+        threads = cue.tracks.length;
       }
       // Multi-thread
       const promises = [];
+      const indexList = [];
+      for (let i = 0; i < cue.tracks.length; i++) {
+        indexList.push(i);
+      }
       for (let i = 0; i < threads; i++) {
-        const sub_song = song_list.slice((song_list.length / threads) * i, (song_list.length / threads) * (i + 1));
-        const sub_meta = meta_list.slice((meta_list.length / threads) * i, (meta_list.length / threads) * (i + 1));
-
-        promises.push(multi_thread(shared_data, sub_song, sub_meta));
+        const subList = indexList.slice((indexList.length / threads) * i, (indexList.length / threads) * (i + 1));
+        promises.push(multi_thread(cue, subList));
       }
       Promise.all(promises)
         .then(() => {
-          cleanup_post_processing(shared_data);
-          let last_album = "";
-          song_list.forEach((song) => {
-            if (last_album !== song.album) {
-              last_album = song.album;
-              writeSongMeta(join(dirname(shared_data.folder), last_album));
-            }
-          });
+          cleanup_post_processing(cue);
+          writeSongMeta(cue.directory);
         })
         .catch((error: Error) => {
           log_error(error);
@@ -139,48 +156,180 @@ export function process_recording(
   }
 }
 
-export function load_recording_config(folder: string) {
-  const shared_data_path = format({
-    dir: folder,
-    base: "shared_data.json",
-  });
-  const shared_data: ISharedDataObject = JSON.parse(readFileSync(shared_data_path, "utf-8"));
-
-  const song_list_path = format({
-    dir: folder,
-    base: "song_list.json",
-  });
-  const song_list: ISongObject[] = JSON.parse(readFileSync(song_list_path, "utf-8"));
-
-  const meta_list_path = format({
-    dir: folder,
-    base: "meta_list.json",
-  });
-  const meta_list: IMetaDataObject[] = JSON.parse(readFileSync(meta_list_path, "utf-8"));
-
-  process_recording(song_list, meta_list, shared_data);
+export function splitCueSheet(folder: string) {
+  const cue = new CueParser(join(folder, "proto.cue"));
+  cue.parseCueSheet().then(() => process_recording(cue));
 }
 
-export function process(shared_data: ISharedDataObject, song_list: ISongObject[], meta_list: IMetaDataObject[]) {
-  // Store song and meta list in case of process failure
-  const song_list_path = format({
-    dir: shared_data.folder,
-    base: "song_list.json",
-  });
-  const meta_list_path = format({
-    dir: shared_data.folder,
-    base: "meta_list.json",
-  });
-  const shared_data_path = format({
-    dir: shared_data.folder,
-    base: "shared_data.json",
-  });
+export function createCompliantCueSheets(folder: string) {
+  const cue = new CueParser(join(folder, "proto.cue"));
+  cue.parseCueSheet().then(() => cue.exportCompliantSheets());
+}
 
-  writeFile(song_list_path, JSON.stringify(song_list), "utf8", () => {
-    writeFile(meta_list_path, JSON.stringify(meta_list), "utf8", () => {
-      writeFile(shared_data_path, JSON.stringify(shared_data), "utf8", () => {
-        process_recording(song_list, meta_list, shared_data);
-      });
+interface ICueTrack {
+  track: number;
+  title: string;
+  performer?: string;
+  index: string;
+}
+
+export class CueParser {
+  public albumArtist: string;
+  public albumTitle: string;
+  public file: string;
+  public tracks: ICueTrack[];
+  public cueFile: string;
+  public directory: string;
+  public recording: string;
+  public cover?: string;
+
+  constructor(cuePath: string) {
+    this.albumArtist = "";
+    this.albumTitle = "";
+    this.file = "";
+    this.tracks = [];
+    this.cueFile = cuePath;
+    this.directory = resolve(dirname(cuePath));
+    this.recording = join(this.directory, "raw_recording.mp3");
+
+    this.findCover();
+  }
+
+  public async parseCueSheet() {
+    if (!existsSync(this.cueFile)) {
+      print(`Error! Cannot find cue at ${this.cueFile}. Skipping parse`);
+      return;
+    }
+    let useTracks = false;
+    let currentTrack: ICueTrack = {
+      track: 1,
+      title: "",
+      index: "",
+    };
+    const rl = readline.createInterface({
+      input: createReadStream(this.cueFile),
+      crlfDelay: Infinity,
     });
-  });
+
+    for await (const line of rl) {
+      const splits = line.trim().split(" ");
+
+      if (useTracks) {
+        if (splits[0] === "TRACK") {
+          currentTrack = {
+            track: Number(splits[1]),
+            title: "",
+            index: "",
+          };
+        } else if (splits[0] === "TITLE") {
+          const name = splits.slice(1).join(" ");
+          currentTrack.title = name.substring(1, name.length - 1);
+        } else if (splits[0] === "PERFORMER") {
+          const name = splits.slice(1).join(" ");
+          currentTrack.performer = name.substring(1, name.length - 1);
+        } else if (splits[0] === "INDEX") {
+          const index = splits[2];
+          currentTrack.index = index;
+          this.tracks.push(currentTrack);
+        }
+      } else {
+        if (splits[0] === "PERFORMER") {
+          const name = splits.slice(1).join(" ");
+          this.albumArtist = name.substring(1, name.length - 1);
+        } else if (splits[0] === "TITLE") {
+          const name = splits.slice(1).join(" ");
+          this.albumTitle = name.substring(1, name.length - 1);
+        } else if (splits[0] === "FILE") {
+          const name = splits.slice(1, splits.length - 1).join(" ");
+          this.file = name.substring(1, name.length - 1);
+        } else if (splits[0] === "TRACK") {
+          useTracks = true;
+        }
+      }
+    }
+  }
+
+  public findCover() {
+    const validImageExts = [
+      "png",
+      "jpg",
+      "jpeg",
+      "jfif",
+      "pjpeg",
+      "pjp",
+      "bmp",
+      "gif",
+      "apng",
+      "ico",
+      "cur",
+      "svg",
+      "tif",
+      "tiff",
+      "webp",
+    ];
+    const cover = readdirSync(dirname(this.cueFile), { withFileTypes: true }).filter(
+      (file: Dirent) =>
+        file.isFile() &&
+        validImageExts.includes(
+          file.name
+            .split(".")
+            .splice(1, 1)
+            .join("."),
+        ),
+    );
+    if (!isEmpty(cover)) {
+      this.cover = join(this.directory, cover[0].name);
+    }
+  }
+
+  public exportCompliantSheets() {
+    const MAX_TRACKS = 98;
+    if (this.tracks.length > MAX_TRACKS) {
+      const loops = Math.ceil(this.tracks.length / MAX_TRACKS);
+      for (let i = 1; i < loops + 1; i++) {
+        const splitSheetPath = join(dirname(this.cueFile), `cSheet-${i}.cue`);
+        const cue = new CueSheet(this.albumArtist, this.albumTitle, splitSheetPath);
+        const slicedTracks = this.tracks.slice((i - 1) * MAX_TRACKS, i * MAX_TRACKS);
+        if (i * MAX_TRACKS < this.tracks.length) {
+          slicedTracks.push({
+            track: MAX_TRACKS,
+            title: `End of cue sheet ${i}`,
+            index: this.tracks[i * MAX_TRACKS].index,
+          });
+        }
+        this.exportSheet(slicedTracks, cue).then(() => print(`Completed Sheet ${i}`));
+      }
+    }
+  }
+
+  public exportSheet(slicedTracks: ICueTrack[], cue: CueSheet) {
+    return Promise.all(slicedTracks.map((track) => cue.add_song(track.title, track.index, track.performer))).then(() =>
+      console.log(`Completed ${cue.file_path}`),
+    );
+  }
+
+  public formatTrackIndex(index: number) {
+    const times = this.tracks[index].index.split(":");
+    const seconds = Number(times[1]) + 60 * Number(times[0]);
+    return format_seconds(seconds);
+  }
+
+  public getSongDuration(index: number) {
+    if (this.tracks[index + 1]) {
+      const timesA = this.tracks[index + 1].index.split(":");
+      const secondsA = Number(timesA[1]) + 60 * Number(timesA[0]);
+      const timesB = this.tracks[index].index.split(":");
+      const secondsB = Number(timesB[1]) + 60 * Number(timesB[0]);
+      return secondsA - secondsB;
+    }
+
+    return 999999999;
+  }
+
+  public makeSongFile(index: number) {
+    return join(
+      this.directory,
+      `${Number(this.tracks[index].track)}. ${sane_fs(this.tracks[index].title.substring(0, 15))}.mp3`,
+    );
+  }
 }

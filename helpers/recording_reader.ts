@@ -15,10 +15,10 @@ export function update_reader(new_export_folder: string) {
 
 export const getPastRecordings = () => {
   let dirs: string[] = readdirSync(export_folder, { withFileTypes: true })
-    .filter((file: Dirent) => file.isDirectory() && file.name.split(" ").length > 1)
+    .filter((file: Dirent) => file.isDirectory() && file.name.split(" ").length > 1 && getSongCount(file.name) > 0)
     .map((dir: Dirent) => dir.name);
   const result: IPastRecording[] = [];
-  dirs.reverse();
+  dirs = dirs.sort().reverse();
   if (maxDirsSent > 0) {
     dirs = dirs.slice(0, maxDirsSent);
   }
@@ -82,13 +82,32 @@ export const getRecordingCover = (data: { folder: string }) => {
 };
 
 const getRecordingCoverPath = (folder: string) => {
+  const validImageExts = [
+    "png",
+    "jpg",
+    "jpeg",
+    "jfif",
+    "pjpeg",
+    "pjp",
+    "bmp",
+    "gif",
+    "apng",
+    "ico",
+    "cur",
+    "svg",
+    "tif",
+    "tiff",
+    "webp",
+  ];
   const cover = readdirSync(join(export_folder, folder), { withFileTypes: true }).filter(
     (file: Dirent) =>
       file.isFile() &&
-      file.name
-        .split(".")
-        .slice(0, 1)
-        .join(".") === "cover",
+      validImageExts.includes(
+        file.name
+          .split(".")
+          .splice(1, 1)
+          .join("."),
+      ),
   );
   if (isEmpty(cover)) {
     return null;

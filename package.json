@@ -1,6 +1,6 @@
 {
   "name": "linkcube-nora",
-  "version": "1.1.7",
+  "version": "1.2.0",
   "description": "Nodejs R/a/dio Archiver",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -36,11 +36,10 @@
     "express-graphql": "^0.9.0",
     "fluent-ffmpeg": "^2.1.2",
     "graphql": "^14.5.8",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.20",
     "node-id3": "^0.1.11",
     "request": "^2.88.0",
     "request-promise": "^4.2.4",
-    "rimraf": "^3.0.0",
     "sanitize-filename": "^1.6.3",
     "winston": "^3.2.1"
   },
@@ -52,12 +51,11 @@
     "@types/lodash": "^4.14.149",
     "@types/node": "^13.1.2",
     "@types/request-promise": "^4.1.45",
-    "@types/rimraf": "^2.0.3",
     "prettier": "^1.19.1",
     "ts-node": "^8.5.2",
     "tslint": "^5.20.1",
     "tslint-config-prettier": "^1.18.0",
-    "typescript": "^3.7.2"
+    "typescript": "^3.9.7"
   },
   "files": [
     "lib/**/*"

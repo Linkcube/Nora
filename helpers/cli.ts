@@ -36,8 +36,14 @@ const sections = [
       {
         name: "process",
         alias: "p",
-        typeLabel: "{underline file}",
-        description: "Process a previous recording.",
+        typeLabel: "{underline folder}",
+        description: "Process a previous recording folder into mp3 files.",
+      },
+      {
+        name: "cue_sheets",
+        alias: "k",
+        typeLabel: Boolean,
+        description: "Split a recording into compliant cue sheets instead of mp3 files.",
       },
     ],
   },
@@ -54,5 +60,6 @@ export const cli_opts = [
   { name: "auto_save", alias: "a", type: Boolean },
   { name: "start", alias: "s", type: Boolean },
   { name: "process", alias: "p", type: String },
+  { name: "cue_sheets", alias: "k", type: Boolean },
   { name: "help", alias: "h", type: Boolean },
 ];
