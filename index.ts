@@ -2,19 +2,16 @@ import * as express from "express";
 import * as express_graphql from "express-graphql";
 import { createWriteStream, existsSync, mkdir, readFileSync, writeFileSync } from "fs";
 import { createServer } from "http";
-import { clone, takeRight } from "lodash";
 import { format, join, parse, resolve } from "path";
 import * as request from "request";
-import { process } from "./helpers/recording_processor";
+import { CueSheet } from "./helpers/cue_sheet";
+import { createCompliantCueSheets, splitCueSheet } from "./helpers/recording_processor";
 import { getPastRecordings, getRecordedSongs, getRecordingCover, update_reader } from "./helpers/recording_reader";
 import { SCHEMA } from "./helpers/schema";
 import { format_seconds, log_error, print, resolve_after_get } from "./helpers/shared_functions";
 import {
   IApiObject,
-  IMetaDataObject,
   IServerObject,
-  ISharedDataObject,
-  ISongObject,
   IUpdateDataObject,
 } from "./helpers/types";
 
@@ -49,17 +46,15 @@ let current_song: number = 1;
 let stream_request: any;
 let raw_data_folder: string = "";
 let export_folder: string = join(".", "recordings_folder");
-let song_list: ISongObject[] = [];
-let metadata_list: IMetaDataObject[] = [];
 let rec_start: number | null;
-let recover_path: string = "";
 let force_stop: boolean = true;
 let last_rec: boolean = false;
-const output_folders: string[] = [];
 let excluded_djs: string[] = ["Hanyuu-sama"];
 const split_character: string = " - ";
 let config_file = "config.json";
 let auto_save = false;
+let cueSheet: CueSheet;
+let cueSplit = false;
 
 function save_config() {
   const config = {
@@ -75,54 +70,17 @@ function save_config() {
   writeFileSync(config_file, JSON.stringify(config));
 }
 
-function gen_song_meta(filename: string) {
-  let artist;
-  let song_name;
-  if (api.np.split(split_character).length === 2) {
-    song_name = api.np.split(split_character)[1];
-    artist = api.np.split(split_character)[0];
-  } else {
-    song_name = api.np;
-    artist = api.dj_name;
-  }
-  return {
-    song_name,
-    artist,
-    location: filename,
-    track: current_song,
-  };
-}
-
 function song_change() {
-  const filename = format({
-    base: `${current_song}. ${sane_fs(api.np.substring(0, 20))}.mp3`,
-    dir: join(export_folder, output_folders[output_folders.length - 1]),
-  });
-  metadata_list.push(gen_song_meta(filename));
   let start = 0;
   if (rec_start) {
     start = api.start_time - rec_start;
-    if (song_list.length > 0) {
-      // For Hijacks where DJs share the same "Hijack #" name
-      const last_two_meta = takeRight(metadata_list, 2);
-      const last_song = takeRight(song_list)[0];
-      if (
-        last_song.dj !== api.dj_name &&
-        last_two_meta[0].song_name === last_two_meta[1].song_name &&
-        last_song.dj === last_two_meta[1].artist
-      ) {
-        start = api.current_time - (rec_start + last_song.start);
-      }
-    }
     start = Math.max(0, start);
   }
-  song_list.push({
-    start,
-    filename,
-    dj: api.dj_name,
-    cover: recover_path,
-    album: output_folders[output_folders.length - 1],
-  });
+  if (api.np.split(split_character).length === 2) {
+    cueSheet.add_song(api.np.split(split_character)[1], start, api.np.split(split_character)[0]);
+  } else {
+    cueSheet.add_song(api.np, start);
+  }
   print(current_song + ". " + sane_fs(api.np) + " ::" + format_seconds(start) + "::");
   current_song += 1;
 }
@@ -131,7 +89,7 @@ function get_dj_pic(dj_folder: string) {
   const dj_pic_url = api_uri + "/dj-image/" + api.dj_pic;
   const dot_split = api.dj_pic.split(".");
 
-  recover_path = format({
+  const recover_path = format({
     base: `cover.${dot_split[dot_split.length - 1]}`,
     dir: dj_folder,
   });
@@ -149,11 +107,11 @@ function start_streaming(recording_dir: string) {
     .get(stream_uri)
     .on("error", (err: Error) => {
       log_error(err);
-      teardown().then(() => dj_change());
+      dj_change();
     })
     .on("complete", () => {
       print(`Stream request completed, restarting.`);
-      teardown().then(() => dj_change());
+      dj_change();
     })
     .pipe(
       createWriteStream(
@@ -167,27 +125,19 @@ function start_streaming(recording_dir: string) {
 }
 
 function teardown() {
-  return new Promise((res) => {
+  return new Promise<void>((res) => {
     if (stream_request != null) {
       stream_request.destroy();
       stream_request = null;
     }
     if (last_rec) {
-      const shared_data: ISharedDataObject = {
-        bitrate: server.bitrate,
-        date: rec_start!,
-        folder: raw_data_folder,
-        raw_path: format({
-          base: "raw_recording.mp3",
-          dir: raw_data_folder,
-        }),
-        sample_rate: server.sample_rate,
-      };
-      process(shared_data, clone(song_list), clone(metadata_list));
+      if (cueSplit) {
+        createCompliantCueSheets(raw_data_folder);
+      } else {
+        splitCueSheet(raw_data_folder);
+      }
       last_rec = false;
     }
-    song_list = [];
-    metadata_list = [];
     current_song = 1;
     rec_start = null;
     res();
@@ -195,39 +145,32 @@ function teardown() {
 }
 
 function dj_change() {
-  // Don't break the stream on a new dj
+  // Skip if excluded (ex: hanyuu), or stopped.
   if (excluded_djs.includes(api.dj_name) || force_stop) {
     if (!force_stop) {
       print(`Excluded DJ ${api.dj_name} detected, skipping.`);
     }
     return teardown();
   }
-  return new Promise(() => {
+  return new Promise<void>((res) => {
     print(api.dj_name + " has taken over.");
-    const folder = sane_fs(`${Math.floor(Date.now() / 1000)}`);
-    if (last_rec === false) {
-      raw_data_folder = join(export_folder, folder);
-      mkdir(raw_data_folder, (err) => {
-        if (err && err.code !== "EEXIST") {
-          log_error(err);
-          throw err;
-        }
-        print("Setting up the stream");
-        rec_start = api.current_time;
-        last_rec = true;
-        start_streaming(raw_data_folder);
-      });
-    }
-    const output_folder = `${folder} ${api.dj_name}`;
+    const timestamp = sane_fs(`${Math.floor(Date.now() / 1000)}`);
+    const output_folder = `${timestamp} ${api.dj_name}`;
     const dj_folder = join(export_folder, output_folder);
+    raw_data_folder = dj_folder;
     mkdir(dj_folder, (err) => {
       if (err && err.code !== "EEXIST") {
         log_error(err);
         throw err;
       }
-      output_folders.push(output_folder);
+      print("Setting up the stream");
+      rec_start = api.current_time;
+      last_rec = true;
+      start_streaming(dj_folder);
+      cueSheet = new CueSheet(api.dj_name, timestamp, join(dj_folder, "proto.cue"));
       song_change();
       get_dj_pic(dj_folder);
+      res();
     });
     current_song = 1;
   });
@@ -258,14 +201,14 @@ function poll_api() {
         return;
       }
       if (api.dj_name !== old_dj) {
-        dj_change();
+        teardown().then(() => dj_change());
       } else if (api.np !== old_np) {
         if (!excluded_djs.includes(api.dj_name)) {
           song_change();
         }
       }
-    } catch (_) {
-      // pass
+    } catch (err) {
+      log_error(err);
     }
   });
 }
@@ -282,9 +225,8 @@ function poll_server() {
         server_description: stream.server_description,
         server_name: stream.server_name,
       };
-      // stream_uri = stream.listenurl;
-    } catch (_) {
-      // pass
+    } catch (err) {
+      log_error(err);
     }
   });
 }
@@ -392,15 +334,12 @@ const streamAction = (data: { action: string }) => {
   print(data);
   if (data.action === "stop") {
     force_stop = true;
-    dj_change();
   } else if (data.action === "start") {
     if (force_stop) {
       force_stop = false;
-      dj_change();
     }
-  } else if (data.action === "refresh") {
-    teardown().then(() => dj_change());
   }
+  teardown().then(() => dj_change());
   return true;
 };
 
@@ -430,8 +369,8 @@ export function stop_everything() {
   clearInterval(polling_interval_id);
 }
 
-export function initial_start(options: { config: string; default: boolean; auto: boolean }) {
-  print("Starting Nora v1.1.6");
+export function initial_start(options: { config: string; default: boolean; auto: boolean; cueSplit: boolean }) {
+  print("Starting Nora v1.2.0");
   let config;
   config_file = options.config ? options.config : "config.json";
   if (options.config && existsSync(options.config)) {
@@ -444,12 +383,15 @@ export function initial_start(options: { config: string; default: boolean; auto:
     }
   }
 
+  cueSplit = options.cueSplit || false;
+
   if (config) {
     api_uri = config.api_uri;
     server_uri = config.server_uri;
     stream_uri = config.stream_uri;
     poll_interval = config.poll_interval;
     excluded_djs = config.excluded_djs;
+    cueSplit = config.cueSplit || cueSplit;
     if (config.export_folder === "") {
       export_folder = format(parse("."));
     } else {

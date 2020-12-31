@@ -25,6 +25,7 @@ Usage (shorthand) | Description | Example
 --auto_save (-a) | Save changes made in the gui to the config file | `-a`
 --process (-p) | Process a previous recording | `-p my_recording`
 --start (-s) | Start the main program | `-s`
+--cue_split (-k) | Split the cue sheet into compliant cue sheets, rather than create mp3 files | `-p ... -k | -s -k`
 
 When using `--config`, it must be used in conjunction with `--start`, i.e `ts-node nora.ts -c config.json --start`
 
