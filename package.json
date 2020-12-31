@@ -1,6 +1,6 @@
 {
   "name": "linkcube-nora",
-  "version": "1.2.0",
+  "version": "1.2.0a",
   "description": "Nodejs R/a/dio Archiver",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -30,7 +30,7 @@
     "@ffmpeg-installer/ffmpeg": "^1.0.20",
     "@ffprobe-installer/ffprobe": "^1.0.12",
     "command-line-args": "^5.1.1",
-    "command-line-usage": "^6.1.0",
+    "command-line-usage": "^6.1.1",
     "cors": "^2.8.5",
     "express": "^4.17.1",
     "express-graphql": "^0.9.0",
