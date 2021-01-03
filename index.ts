@@ -107,11 +107,11 @@ function start_streaming(recording_dir: string) {
     .get(stream_uri)
     .on("error", (err: Error) => {
       log_error(err);
-      dj_change();
+      teardown().then(() => dj_change());
     })
     .on("complete", () => {
       print(`Stream request completed, restarting.`);
-      dj_change();
+      teardown().then(() => dj_change());
     })
     .pipe(
       createWriteStream(
@@ -325,7 +325,7 @@ const updateConfig = (data: IUpdateDataObject) => {
     if (auto_save) {
       save_config();
     }
-    dj_change();
+    teardown().then(() => dj_change());
   }
   return "Changed";
 };
