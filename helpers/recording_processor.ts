@@ -6,6 +6,7 @@ import * as readline from "readline";
 import { CueSheet } from "./cue_sheet";
 import { writeSongMeta } from "./recording_reader";
 import { format_seconds, log_error, print } from "./shared_functions";
+import { cpus } from "os";
 const sane_fs = require("sanitize-filename");
 
 const nodeID3 = require("node-id3");
@@ -129,11 +130,7 @@ export function process_recording(cue: CueParser) {
       }
 
       // Split the file
-      let threads = 3;
-      if (threads < 1) {
-        // Kill the CPU
-        threads = cue.tracks.length;
-      }
+      let threads = cpus().length / 2;
       // Multi-thread
       const promises = [];
       const indexList = [];

@@ -179,6 +179,10 @@ function dj_change() {
 function poll_api() {
   resolve_after_get(api_uri).then((results: { main: any }) => {
     try {
+      if (!results) {
+        print("Empty api results object.")
+        return;
+      }
       let old_np;
       let old_dj;
       if (Object.keys(api).length !== 0) {
