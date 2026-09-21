@@ -1,6 +1,6 @@
 import { buildSchema } from "graphql";
 
-export let SCHEMA = buildSchema(`
+export const SCHEMA = buildSchema(`
     type Query {
         api: api_obj
         server: server_obj

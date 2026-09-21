@@ -11,15 +11,15 @@ export class CueSheet {
     this.current_track = 1;
     this.file_path = path;
     const cue_text = "".concat(`PERFORMER "${dj}"\n`, `TITLE "${timestamp}"\n`, `FILE "raw_recording.mp3" MP3\n`);
-    fs.writeFile(path, cue_text, (err) => {
+    fs.writeFile(path, cue_text, err => {
       if (err) {
         log_error(err);
       }
     });
   }
 
-  public add_song(title: string, timestamp: number | string, artist?: string, ending?: string) {
-    return new Promise<void>((resolve) => {
+  public add_song(title: string, timestamp: number | string, artist?: string) {
+    return new Promise<void>(resolve => {
       let append_text = `${INDENT}TRACK ${this.pad(this.current_track)} AUDIO\n`;
       append_text = append_text.concat(`${INDENT}${INDENT}TITLE "${title}"\n`);
       if (artist) {

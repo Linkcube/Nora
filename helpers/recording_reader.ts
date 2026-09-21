@@ -37,7 +37,6 @@ export const getRecordedSongs = (data: { folder: string }) => {
 };
 
 export const writeSongMeta = (folder: string) => {
-  let songs: IRecordedSong[];
   const songs_meta_path = join(folder, "songs.meta");
   const dirs: Dirent[] = readdirSync(folder, { withFileTypes: true }).filter(
     (file: Dirent) => file.isFile() && file.name.split(" ").length > 1,
@@ -45,8 +44,8 @@ export const writeSongMeta = (folder: string) => {
   dirs.sort((a: Dirent, b: Dirent) => {
     return Number(a.name.split(".")[0]) - Number(b.name.split(".")[0]);
   });
-  songs = dirs.map((dir: Dirent) => getSongMetadata(folder, dir.name));
-  unlink(songs_meta_path, (err) => {
+  const songs: IRecordedSong[] = dirs.map((dir: Dirent) => getSongMetadata(folder, dir.name));
+  unlink(songs_meta_path, err => {
     if (err?.code !== "ENOENT") {
       print(err);
     }

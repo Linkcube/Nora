@@ -1,10 +1,11 @@
-import * as commandLineUsage from "command-line-usage";
+import commandLineUsage = require("command-line-usage");
 
 const sections = [
   {
     header: "Nora",
     content:
-      "Node R/a/dio archiver, for saving your streams. For a gui check out: {underline https://github.com/Linkcube/svelte-radio-interface}",
+      "Node R/a/dio archiver, for saving your streams. " +
+      "For a gui check out: {underline https://github.com/Linkcube/svelte-radio-interface}",
   },
   {
     header: "Options",

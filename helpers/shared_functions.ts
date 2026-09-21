@@ -1,4 +1,3 @@
-import * as rp from "request-promise";
 const winston = require("winston");
 
 const noraLogger = winston.createLogger({
@@ -10,12 +9,16 @@ const noraLogger = winston.createLogger({
   ],
 });
 
-export function resolve_after_get(x: string) {
-  return rp(x)
-    .then((result: string) => {
-      return JSON.parse(result);
-    })
-    .catch((err: Error) => log_error(err));
+export async function resolve_after_get(x: string) {
+  try {
+    const response = await fetch(x);
+    if (!response.ok) {
+      log_error(Error(`Error resolving ${x}: ${response.statusText}`));
+    }
+    return await response.json();
+  } catch (err) {
+    log_error(err as Error);
+  }
 }
 
 export function format_seconds(seconds: number) {

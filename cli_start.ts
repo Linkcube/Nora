@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
-import * as cli_args from "command-line-args";
+import commandLineArgs = require("command-line-args");
 import { cli_opts, usage } from "./helpers/cli";
 import { createCompliantCueSheets, splitCueSheet } from "./helpers/recording_processor";
 import { print } from "./helpers/shared_functions";
 import { initial_start } from "./index";
 
-const options = cli_args(cli_opts);
+const options = commandLineArgs(cli_opts);
 
 if (options.process) {
   if (options.cue_sheets) {

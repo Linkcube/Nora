@@ -7,3 +7,9 @@ recordings_folder
 
 # Built files
 lib
+config.json
+error.log
+info.log
+*.tgz
+tslint-to-eslint-config.log
+.eslintrc.js
