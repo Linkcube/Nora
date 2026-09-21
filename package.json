@@ -6,7 +6,7 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsx ./tsconfig.json",
+    "build": "tsc",
     "format": "prettier --write \"helpers/**/*.ts\" \"index.ts\" \"cli_start.ts\"",
     "lint": "eslint -c eslint.config.js . --fix",
     "prepare": "npm run build",

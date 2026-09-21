@@ -394,7 +394,7 @@ export function stop_everything() {
 }
 
 export function initial_start(options: { config: string; default: boolean; auto: boolean; cueSplit: boolean }) {
-  print("Starting Nora v1.2.0");
+  print("Starting Nora v1.2.3");
   let config;
   config_file = options.config ? options.config : "config.json";
   if (options.config && existsSync(options.config)) {
