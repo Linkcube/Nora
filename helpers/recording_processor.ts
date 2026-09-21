@@ -1,8 +1,8 @@
-import * as ffmpeg from "fluent-ffmpeg";
+import ffmpeg = require("fluent-ffmpeg");
 import { createReadStream, Dirent, existsSync, readdirSync, unlinkSync } from "fs";
 import { isEmpty } from "lodash";
 import { dirname, join, resolve } from "path";
-import * as readline from "readline";
+import readline = require("readline");
 import { CueSheet } from "./cue_sheet";
 import { writeSongMeta } from "./recording_reader";
 import { format_seconds, log_error, print } from "./shared_functions";
@@ -16,13 +16,10 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const ffprobePath: string = require("@ffprobe-installer/ffprobe").path;
 ffmpeg.setFfprobePath(ffprobePath);
 
-function multi_thread(cue: CueParser, indexes: number[]) {
-  return new Promise<void>(async (res) => {
-    for (const index of indexes) {
-      await split_song(cue, index);
-    }
-    res();
-  });
+async function multi_thread(cue: CueParser, indexes: number[]) {
+  for (const index of indexes) {
+    await split_song(cue, index);
+  }
 }
 
 function cleanup_post_processing(cue: CueParser) {
@@ -30,7 +27,7 @@ function cleanup_post_processing(cue: CueParser) {
     unlinkSync(cue.recording);
     unlinkSync(cue.cueFile);
   } catch (err) {
-    log_error(err);
+    log_error(err as Error);
   }
 
   print("Finished splitting");
@@ -66,71 +63,72 @@ function split_song(cue: CueParser, trackIndex: number) {
         if (err) {
           log_error(err);
         }
-        reject();
+        reject(err);
       })
       .run();
   });
 }
 
-function single_thread(cue: CueParser) {
-  return new Promise<void>(async (res, reject) => {
-    print("Starting single thread");
-    const reader = ffmpeg(cue.recording)
-      .audioBitrate(192)
-      .audioChannels(2)
-      .audioFrequency(44100)
-      .seekInput(0)
-      .on("error", (err: Error) => {
-        if (err) {
-          log_error(err);
-        }
-        reject();
-      });
-    let i = 0;
-    for await (const track of cue.tracks) {
-      reader.output(cue.makeSongFile(i));
-      if (i < cue.tracks.length - 1) {
-        reader.seek(cue.getSongDuration(i));
-      }
-      i += 1;
-    }
-    reader
-      .on("end", async () => {
-        print("Tagging");
-        // ID3 tagging
-        let n = 0;
-        for await (const track of cue.tracks) {
-          const tags = {
-            title: cue.tracks[n].title,
-            artist: cue.tracks[n].performer || cue.albumArtist,
-            album: cue.albumTitle,
-            APIC: cue.cover,
-            trackNumber: cue.tracks[n].track,
-            date: cue.albumTitle,
-            performerInfo: cue.albumArtist,
-          };
-          nodeID3.write(tags, cue.makeSongFile(n));
-          n += 1;
-        }
-        res();
-      })
-      .run();
-  });
-}
+// Legacy single threaded implementation
+// function single_thread(cue: CueParser) {
+//   return new Promise<void>(async (res, reject) => {
+//     print("Starting single thread");
+//     const reader = ffmpeg(cue.recording)
+//       .audioBitrate(192)
+//       .audioChannels(2)
+//       .audioFrequency(44100)
+//       .seekInput(0)
+//       .on("error", (err: Error) => {
+//         if (err) {
+//           log_error(err);
+//         }
+//         reject();
+//       });
+//     let i = 0;
+//     for await (const track of cue.tracks) {
+//       reader.output(cue.makeSongFile(i));
+//       if (i < cue.tracks.length - 1) {
+//         reader.seek(cue.getSongDuration(i));
+//       }
+//       i += 1;
+//     }
+//     reader
+//       .on("end", async () => {
+//         print("Tagging");
+//         // ID3 tagging
+//         let n = 0;
+//         for await (const track of cue.tracks) {
+//           const tags = {
+//             title: cue.tracks[n].title,
+//             artist: cue.tracks[n].performer || cue.albumArtist,
+//             album: cue.albumTitle,
+//             APIC: cue.cover,
+//             trackNumber: cue.tracks[n].track,
+//             date: cue.albumTitle,
+//             performerInfo: cue.albumArtist,
+//           };
+//           nodeID3.write(tags, cue.makeSongFile(n));
+//           n += 1;
+//         }
+//         res();
+//       })
+//       .run();
+//   });
+// }
 
 export function process_recording(cue: CueParser) {
   // Actual splitting
   if (cue.tracks.length !== 0) {
     print(`Splitting ${cue.directory}`);
 
-    ffmpeg(cue.recording).ffprobe((err: Error, data: any) => {
+    ffmpeg(cue.recording).ffprobe((err: Error, _: any) => {
       if (err) {
         log_error(err);
         return;
       }
 
       // Split the file
-      let threads = cpus().length / 2;
+      const threads = cpus().length / 2;
       // Multi-thread
       const promises = [];
       const indexList = [];
@@ -155,12 +153,18 @@ export function process_recording(cue: CueParser) {
 
 export function splitCueSheet(folder: string) {
   const cue = new CueParser(join(folder, "proto.cue"));
-  cue.parseCueSheet().then(() => process_recording(cue));
+  cue
+    .parseCueSheet()
+    .then(() => process_recording(cue))
+    .catch((err: Error) => log_error(err));
 }
 
 export function createCompliantCueSheets(folder: string) {
   const cue = new CueParser(join(folder, "proto.cue"));
-  cue.parseCueSheet().then(() => cue.exportCompliantSheets());
+  cue
+    .parseCueSheet()
+    .then(() => cue.exportCompliantSheets())
+    .catch((err: Error) => log_error(err));
 }
 
 interface ICueTrack {
@@ -294,13 +298,15 @@ export class CueParser {
             index: this.tracks[i * MAX_TRACKS].index,
           });
         }
-        this.exportSheet(slicedTracks, cue).then(() => print(`Completed Sheet ${i}`));
+        this.exportSheet(slicedTracks, cue)
+          .then(() => print(`Completed Sheet ${i}`))
+          .catch((err: Error) => log_error(err));
       }
     }
   }
 
   public exportSheet(slicedTracks: ICueTrack[], cue: CueSheet) {
-    return Promise.all(slicedTracks.map((track) => cue.add_song(track.title, track.index, track.performer))).then(() =>
+    return Promise.all(slicedTracks.map(track => cue.add_song(track.title, track.index, track.performer))).then(() =>
       console.log(`Completed ${cue.file_path}`),
     );
   }

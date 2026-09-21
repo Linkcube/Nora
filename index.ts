@@ -1,19 +1,17 @@
-import * as express from "express";
-import * as express_graphql from "express-graphql";
+import express = require("express");
+import express_graphql = require("express-graphql");
 import { createWriteStream, existsSync, mkdir, readFileSync, writeFileSync } from "fs";
+import { Readable } from "stream";
+import http = require("http");
+import https = require("https");
 import { createServer } from "http";
 import { format, join, parse, resolve } from "path";
-import * as request from "request";
 import { CueSheet } from "./helpers/cue_sheet";
 import { createCompliantCueSheets, splitCueSheet } from "./helpers/recording_processor";
 import { getPastRecordings, getRecordedSongs, getRecordingCover, update_reader } from "./helpers/recording_reader";
 import { SCHEMA } from "./helpers/schema";
 import { format_seconds, log_error, print, resolve_after_get } from "./helpers/shared_functions";
-import {
-  IApiObject,
-  IServerObject,
-  IUpdateDataObject,
-} from "./helpers/types";
+import { IApiObject, IServerObject, IUpdateDataObject } from "./helpers/types";
 
 const sane_fs = require("sanitize-filename");
 const cors = require("cors");
@@ -77,9 +75,11 @@ function song_change() {
     start = Math.max(0, start);
   }
   if (api.np.split(split_character).length === 2) {
-    cueSheet.add_song(api.np.split(split_character)[1], start, api.np.split(split_character)[0]);
+    cueSheet
+      .add_song(api.np.split(split_character)[1], start, api.np.split(split_character)[0])
+      .catch((err: Error) => log_error(err));
   } else {
-    cueSheet.add_song(api.np, start);
+    cueSheet.add_song(api.np, start).catch((err: Error) => log_error(err));
   }
   print(current_song + ". " + sane_fs(api.np) + " ::" + format_seconds(start) + "::");
   current_song += 1;
@@ -93,41 +93,49 @@ function get_dj_pic(dj_folder: string) {
     base: `cover.${dot_split[dot_split.length - 1]}`,
     dir: dj_folder,
   });
-  request(dj_pic_url)
-    .pipe(createWriteStream(recover_path))
-    .on("close", () => {
-      // pass
-    });
+  fetch(dj_pic_url)
+    .then(response => {
+      if (response.ok && response.body) {
+        Readable.fromWeb(response.body as any).pipe(createWriteStream(recover_path));
+      }
+    })
+    .catch((err: Error) => log_error(err));
 }
 
 function start_streaming(recording_dir: string) {
   print(`Starting stream recording: ${stream_uri}`);
   print(`Creating new fs stream: ${recording_dir}`);
-  stream_request = request
-    .get(stream_uri)
-    .on("error", (err: Error) => {
-      log_error(err);
-      teardown().then(() => dj_change());
-    })
-    .on("complete", () => {
+
+  const write_stream = createWriteStream(format({ base: "raw_recording.mp3", dir: recording_dir }), {
+    flags: "w",
+  }).on("error", (err: Error) => log_error(err));
+
+  const client = stream_uri.startsWith("https") ? https : http;
+
+  stream_request = client.get(stream_uri, res => {
+    // Pipe audio stream
+    res.pipe(write_stream);
+    // Handle stream completion
+    res.on("end", () => {
       print(`Stream request completed, restarting.`);
-      teardown().then(() => dj_change());
-    })
-    .pipe(
-      createWriteStream(
-        format({
-          base: "raw_recording.mp3",
-          dir: recording_dir,
-        }),
-        { flags: "w" },
-      ).on("error", (err: Error) => log_error(err)),
-    );
+      teardown()
+        .then(() => dj_change())
+        .catch((err: Error) => log_error(err));
+    });
+    // Handle stream errors
+    res.on("error", (err: Error) => {
+      log_error(err);
+      teardown()
+        .then(() => dj_change())
+        .catch((eslintshutup: Error) => log_error(eslintshutup));
+    });
+  });
 }
 
 function teardown() {
-  return new Promise<void>((res) => {
+  return new Promise<void>(res => {
     if (stream_request != null) {
-      stream_request.destroy();
+      stream_request.end();
       stream_request = null;
     }
     if (last_rec) {
@@ -141,7 +149,7 @@ function teardown() {
     current_song = 1;
     rec_start = null;
     res();
-  });
+  }).catch((err: Error) => log_error(err));
 }
 
 function dj_change() {
@@ -152,13 +160,13 @@ function dj_change() {
     }
     return teardown();
   }
-  return new Promise<void>((res) => {
+  return new Promise<void>(res => {
     print(api.dj_name + " has taken over.");
     const timestamp = sane_fs(`${Math.floor(Date.now() / 1000)}`);
     const output_folder = `${timestamp} ${api.dj_name}`;
     const dj_folder = join(export_folder, output_folder);
     raw_data_folder = dj_folder;
-    mkdir(dj_folder, (err) => {
+    mkdir(dj_folder, err => {
       if (err && err.code !== "EEXIST") {
         log_error(err);
         throw err;
@@ -177,62 +185,68 @@ function dj_change() {
 }
 
 function poll_api() {
-  resolve_after_get(api_uri).then((results: { main: any }) => {
-    try {
-      if (!results) {
-        print("Empty api results object.")
-        return;
-      }
-      let old_np;
-      let old_dj;
-      if (Object.keys(api).length !== 0) {
-        old_np = api.np;
-        old_dj = api.dj_name;
-      } else {
-        old_dj = "";
-      }
-      api = {
-        current_time: results.main.current,
-        dj_name: results.main.dj.djname,
-        dj_pic: results.main.dj.djimage,
-        end_time: results.main.end_time,
-        listeners: results.main.listeners,
-        lp: results.main.lp,
-        np: results.main.np,
-        start_time: results.main.start_time,
-      };
-      if (force_stop) {
-        return;
-      }
-      if (api.dj_name !== old_dj) {
-        teardown().then(() => dj_change());
-      } else if (api.np !== old_np) {
-        if (!excluded_djs.includes(api.dj_name)) {
-          song_change();
+  resolve_after_get(api_uri)
+    .then((results: { main: any }) => {
+      try {
+        if (!results) {
+          print("Empty api results object.");
+          return;
         }
+        let old_np;
+        let old_dj;
+        if (Object.keys(api).length !== 0) {
+          old_np = api.np;
+          old_dj = api.dj_name;
+        } else {
+          old_dj = "";
+        }
+        api = {
+          current_time: results.main.current,
+          dj_name: results.main.dj.djname,
+          dj_pic: results.main.dj.djimage,
+          end_time: results.main.end_time,
+          listeners: results.main.listeners,
+          lp: results.main.lp,
+          np: results.main.np,
+          start_time: results.main.start_time,
+        };
+        if (force_stop) {
+          return;
+        }
+        if (api.dj_name !== old_dj) {
+          teardown()
+            .then(() => dj_change())
+            .catch((err: Error) => log_error(err));
+        } else if (api.np !== old_np) {
+          if (!excluded_djs.includes(api.dj_name)) {
+            song_change();
+          }
+        }
+      } catch (err) {
+        log_error(err as Error);
       }
-    } catch (err) {
-      log_error(err);
-    }
-  });
+    })
+    .catch((err: Error) => log_error(err));
 }
 
 function poll_server() {
-  resolve_after_get(server_uri).then((results: { icestats: any }) => {
-    try {
-      const stats = results.icestats.source[0];
-      const stream = results.icestats.source[1];
-      server = {
-        audio_format: stats.server_type,
-        bitrate: stats.bitrate,
-        sample_rate: stats.samplerate,
-        server_description: stream.server_description,
-        server_name: stream.server_name,
-      };
-    } catch (err) {
-      log_error(err);
-    }
-  });
+  resolve_after_get(server_uri)
+    .then((results: { icestats: any }) => {
+      try {
+        const stats = results.icestats.source[0];
+        const stream = results.icestats.source[1];
+        server = {
+          audio_format: stats.server_type,
+          bitrate: stats.bitrate,
+          sample_rate: stats.samplerate,
+          server_description: stream.server_description,
+          server_name: stream.server_name,
+        };
+      } catch (err) {
+        log_error(err as Error);
+      }
+    })
+    .catch((err: Error) => log_error(err));
 }
 
 function start_server() {
@@ -310,26 +324,30 @@ const updateConfig = (data: IUpdateDataObject) => {
     new_export_path = format(parse(data.config.export_folder));
   }
   if (export_folder !== new_export_path) {
-    teardown().then(() => {
-      mkdir(new_export_path, (err) => {
-        if (err && err.code !== "EEXIST") {
-          log_error(err);
-          throw err;
-        }
-        export_folder = new_export_path;
-        update_reader(export_folder);
-        app.use(express.static(resolve(export_folder)));
-        if (auto_save) {
-          save_config();
-        }
-        dj_change();
-      });
-    });
+    teardown()
+      .then(() => {
+        mkdir(new_export_path, err => {
+          if (err && err.code !== "EEXIST") {
+            log_error(err);
+            throw err;
+          }
+          export_folder = new_export_path;
+          update_reader(export_folder);
+          app.use(express.static(resolve(export_folder)));
+          if (auto_save) {
+            save_config();
+          }
+          dj_change().catch((eslintshutup: Error) => log_error(eslintshutup));
+        });
+      })
+      .catch((err: Error) => log_error(err));
   } else {
     if (auto_save) {
       save_config();
     }
-    teardown().then(() => dj_change());
+    teardown()
+      .then(() => dj_change())
+      .catch((err: Error) => log_error(err));
   }
   return "Changed";
 };
@@ -343,7 +361,9 @@ const streamAction = (data: { action: string }) => {
       force_stop = false;
     }
   }
-  teardown().then(() => dj_change());
+  teardown()
+    .then(() => dj_change())
+    .catch((err: Error) => log_error(err));
   return true;
 };
 
@@ -405,7 +425,7 @@ export function initial_start(options: { config: string; default: boolean; auto:
 
   auto_save = options.auto;
 
-  mkdir(export_folder, (err) => {
+  mkdir(export_folder, err => {
     if (err && err.code !== "EEXIST") {
       log_error(err);
       throw err;
